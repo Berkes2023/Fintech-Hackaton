@@ -19,7 +19,7 @@ const ERRORS: Record<number, string> = {
   429: "The assistant is busy. Try again in a minute.",
 };
 
-export function AskPanel({ type, context }: { type: ProductType; context: () => string }) {
+export function AskPanel({ type, context, hasDocument = false }: { type: ProductType; context: () => string; hasDocument?: boolean }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [streaming, setStreaming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export function AskPanel({ type, context }: { type: ProductType; context: () => 
         AI can explain these numbers and answer your questions. It sees only what’s on this page, and it won’t tell you whether to take the product.
       </p>
       <div className="chips">
-        {CHIPS[type].map((c) => <button key={c} type="button" className="chip" onClick={() => ask(c)} disabled={streaming !== null}>{c}</button>)}
+        {(hasDocument ? ["Where does the document say the interest rate and fees?", ...CHIPS[type]] : CHIPS[type]).map((c) => <button key={c} type="button" className="chip" onClick={() => ask(c)} disabled={streaming !== null}>{c}</button>)}
       </div>
       {(turns.length > 0 || streaming !== null) && (
         <div className="thread" aria-live="polite">

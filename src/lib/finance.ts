@@ -173,7 +173,11 @@ const annuity = (p: number, r: number, k: number) => (r ? (p * r) / (1 - Math.po
 export const CARD_CAP_MONTHS = 360;
 export const OVERDRAFT_CAP_MONTHS = 120;
 
-export function simulate(type: ProductType, v: Values): Metrics {
+/**
+ * Runs a product month by month. `extra` is an optional overpayment added to each regular
+ * payment (loans, cards and overdrafts only) for the what-if simulator.
+ */
+export function simulate(type: ProductType, v: Values, extra = 0): Metrics {
   const s: Omit<Point, "cum">[] = [];
   let principal = 0, never = false, left = 0, advertised = 0, headlineTotal = 0;
 
@@ -183,10 +187,11 @@ export function simulate(type: ProductType, v: Values): Metrics {
     const pay = annuity(principal, r, k);
     if (n(v.fee)) s.push({ t: 0, pay: n(v.fee), interest: 0, fee: n(v.fee), bal: principal });
     let bal = principal;
-    for (let i = 1; i <= k; i++) {
+    for (let i = 1; i <= k && bal > 0.005; i++) {
       const int = bal * r;
-      bal = bal + int - pay;
-      s.push({ t: i, pay, interest: int, fee: 0, bal: Math.max(0, bal) });
+      const p = Math.min(pay + extra, bal + int);
+      bal = bal + int - p;
+      s.push({ t: i, pay: p, interest: int, fee: 0, bal: Math.max(0, bal) });
     }
   } else if (type === "card") {
     principal = n(v.balance);
@@ -199,7 +204,7 @@ export function simulate(type: ProductType, v: Values): Metrics {
       const fee = n(v.annualFee) > 0 && (i - 1) % 12 === 0 ? n(v.annualFee) : 0;
       bal += int + fee;
       // Common UK minimum: the greater of £25 or 1% of the balance plus interest and fees.
-      let pay = v.payType === "min" ? Math.max(25, pre * 0.01 + int + fee) : n(v.fixedPay);
+      let pay = (v.payType === "min" ? Math.max(25, pre * 0.01 + int + fee) : n(v.fixedPay)) + extra;
       pay = Math.min(pay, bal);
       bal -= pay;
       s.push({ t: i, pay, interest: int, fee, bal });
@@ -214,7 +219,7 @@ export function simulate(type: ProductType, v: Values): Metrics {
       i++;
       const int = Math.max(0, bal - buf) * r, fee = n(v.monthlyFee);
       bal += int + fee;
-      const pay = Math.min(n(v.repay), bal);
+      const pay = Math.min(n(v.repay) + extra, bal);
       bal -= pay;
       s.push({ t: i, pay, interest: int, fee, bal });
     }
@@ -415,3 +420,127 @@ export const EXAMPLES: SavedOption[] = [
   { id: "ex2", name: "Credit card, £50 a month", type: "card", values: { balance: 1200, apr: 24.9, intro: 0, payType: "fixed", fixedPay: 50, annualFee: 0, lateFee: 12 }, example: true },
   { id: "ex3", name: "Store finance, 24 months", type: "loan", values: { amount: 1200, apr: 19.9, term: 24, fee: 0, lateFee: 12 }, example: true },
 ];
+
+/* ---------- money label ---------- */
+
+export interface LabelRow { label: string; value: string; strong?: boolean }
+export interface LabelNote { kind: "warn" | "ok"; text: string }
+export interface LabelPart { label: string; value: number }
+export interface MoneyLabel { rows: LabelRow[]; notes: LabelNote[]; parts: LabelPart[] }
+
+/** A standard “nutrition label” for any product: the same facts in the same order every time. */
+export function moneyLabel(type: ProductType, v: Values, m: Metrics): MoneyLabel {
+  const p = PRODUCTS[type];
+  const rows: LabelRow[] = [];
+  const notes: LabelNote[] = [];
+  const per = type === "bnpl" && v.interval === "fortnight" ? "every 2 weeks" : "a month";
+
+  if (p.credit) {
+    rows.push({ label: type === "card" ? "Balance to repay" : "You borrow", value: money(m.principal) });
+    rows.push({ label: "You pay back", value: m.never ? "Never cleared" : money(m.total), strong: true });
+    rows.push({
+      label: "Cost of borrowing",
+      value: m.never ? "Keeps growing" : `${money(Math.max(0, m.onTop))}${m.principal > 0 && m.onTop > 0.5 ? ` · ${Math.round((m.onTop / m.principal) * 100)}p per £1` : ""}`,
+      strong: true,
+    });
+    rows.push({ label: type === "bnpl" ? "Each payment" : "Regular payment", value: `${money(m.regular, true)} ${per}` });
+    rows.push({ label: "Commitment", value: m.never ? "More than 30 years" : dur(m.end) });
+    rows.push({ label: type === "overdraft" ? "Interest (EAR)" : "Interest (APR)", value: pct(n(type === "overdraft" ? v.ear : v.apr)) });
+    if (type === "loan") rows.push({ label: "Upfront fee", value: money(n(v.fee)) });
+    if (type === "card") rows.push({ label: "Annual fee", value: money(n(v.annualFee)) });
+    if (type === "overdraft") rows.push({ label: "Monthly fee", value: money(n(v.monthlyFee)) });
+    if (type !== "overdraft") rows.push({ label: type === "bnpl" ? "Late fee per missed payment" : "Late payment fee", value: money(n(v.lateFee)) });
+    rows.push({ label: "Paid in the first 3 months", value: money(m.next3) });
+  } else {
+    rows.push({ label: "Advertised price", value: `${money(m.advertised, true)} a month` });
+    rows.push({ label: "You pay in total", value: money(m.total), strong: true });
+    rows.push({ label: "Above the advertised price", value: money(Math.max(0, m.onTop)), strong: true });
+    rows.push({ label: type === "household" ? "Contract length" : "Time you might keep it", value: dur(m.end) });
+    if (type === "subscription") rows.push({ label: "Yearly price rise", value: pct(n(v.rise)) });
+    if (type === "household") rows.push({ label: "Yearly price rise", value: `${money(n(v.riseAmt), true)} a month` });
+    if (type === "household") rows.push({ label: "Upfront cost", value: money(n(v.upfront)) });
+    rows.push({ label: type === "household" ? "Fee to leave early" : "Cancellation fee", value: money(n(type === "household" ? v.exitFee : v.cancelFee)) });
+    rows.push({ label: "Paid in the first 3 months", value: money(m.next3) });
+  }
+
+  for (const r of risks(type, v, m).filter((x) => x.lvl !== "info").slice(0, 3)) notes.push({ kind: "warn", text: r.title });
+  if (type === "loan") notes.push({ kind: "ok", text: "You have the right to repay early" });
+  if (type === "card" && n(v.intro) > 0) notes.push({ kind: "ok", text: `0% interest for the first ${n(v.intro)} months` });
+  if (type === "bnpl" && !(n(v.apr) > 0)) notes.push({ kind: "ok", text: "No interest if every payment is on time" });
+  if (type === "overdraft" && n(v.buffer) > 0) notes.push({ kind: "ok", text: `First ${money(n(v.buffer))} is interest-free` });
+  if (type === "subscription" && n(v.cancelFee) === 0) notes.push({ kind: "ok", text: "No fee to cancel" });
+
+  const parts: LabelPart[] = p.credit
+    ? [{ label: type === "card" ? "Balance" : "Borrowed", value: m.principal }, { label: "Interest", value: m.interest }, { label: "Fees", value: m.fees }]
+    : [{ label: "Advertised price", value: m.headlineTotal }, { label: "Price rises and upfront costs", value: Math.max(0, m.onTop) }];
+
+  return { rows, notes, parts: parts.filter((x) => x.value > 0.5) };
+}
+
+/* ---------- understanding check ---------- */
+
+export interface CheckOption { label: string; correct: boolean }
+export interface UnderstandingCheck { question: string; options: CheckOption[]; explain: string }
+
+/** One question that checks the person has taken in the total cost. Options are sorted, never random. */
+export function understandingCheck(type: ProductType, v: Values, m: Metrics): UnderstandingCheck | null {
+  if (m.never) return null;
+  const p = PRODUCTS[type];
+  if (p.credit && m.onTop < 0.5) {
+    return {
+      question: "What could this cost on top of the price?",
+      options: [
+        { label: "Nothing, even if I miss a payment", correct: false },
+        { label: "Nothing if every payment is on time, but late fees if I miss one", correct: true },
+        { label: "Interest every month", correct: false },
+      ],
+      explain: `There’s no interest if you pay on time. A missed payment can add a ${money(n(v.lateFee))} fee and may show on your credit file.`,
+    };
+  }
+  const total = Math.round(m.total);
+  const base = Math.round(p.credit ? m.principal : m.headlineTotal);
+  const values = [...new Set([base, Math.round((total + base) / 2), total])];
+  while (values.length < 3) values.push(Math.round(total * 1.25) + values.length);
+  return {
+    question: p.credit ? `You borrow ${money(m.principal)}. How much do you pay back in total?` : `Over ${dur(m.end)}, how much do you pay in total?`,
+    options: values.sort((a, b) => a - b).map((x) => ({ label: money(x), correct: x === total })),
+    explain: p.credit
+      ? `You pay back ${money(m.total)}: the ${money(m.principal)} you borrow plus ${money(m.onTop)} in interest and fees, over ${dur(m.end)}.`
+      : `You pay ${money(m.total)} in total. That’s ${money(Math.max(0, m.onTop))} more than the advertised price suggests, because of price rises and upfront costs.`,
+  };
+}
+
+/* ---------- what-if controls ---------- */
+
+export interface Knob { id: string; label: string; min: number; max: number; step: number; unit: (x: number) => string }
+
+/** The main dial for each product in the what-if simulator. */
+export function whatIfKnob(type: ProductType, v: Values): Knob | null {
+  switch (type) {
+    case "loan": return { id: "term", label: "Repayment term", min: 6, max: 84, step: 6, unit: (x) => dur(x) };
+    case "card": return v.payType === "min" ? null : { id: "fixedPay", label: "Monthly payment", min: 25, max: 400, step: 5, unit: (x) => `${money(x)} a month` };
+    case "overdraft": return { id: "repay", label: "Monthly repayment", min: 25, max: 500, step: 25, unit: (x) => `${money(x)} a month` };
+    case "bnpl": return { id: "n", label: "Number of payments", min: 2, max: 24, step: 1, unit: (x) => `${x} payments` };
+    case "subscription": return { id: "years", label: "How long you keep it", min: 1, max: 6, step: 1, unit: (x) => dur(x * 12) };
+    case "household": return { id: "term", label: "Contract length", min: 12, max: 36, step: 6, unit: (x) => dur(x) };
+  }
+}
+
+/** Products where paying a bit extra each month changes the outcome. */
+export const canOverpay = (type: ProductType) => type === "loan" || type === "card" || type === "overdraft";
+
+/* ---------- missing information ---------- */
+
+/** Fields without which the total cost can't be worked out. */
+export const REQUIRED: Record<ProductType, string[]> = {
+  loan: ["amount", "apr", "term"],
+  card: ["balance", "apr"],
+  overdraft: ["amount", "ear"],
+  bnpl: ["price", "n"],
+  subscription: ["monthly"],
+  household: ["monthly", "term"],
+};
+
+export function fieldLabel(type: ProductType, id: string): string {
+  return PRODUCTS[type].fields.find((f) => f.id === id)?.label ?? id;
+}

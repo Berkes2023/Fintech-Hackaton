@@ -38,10 +38,18 @@ export default function ResponsibleAIPage() {
           <li>It only uses the figures on the page. If something isn’t there, it says so and suggests asking the provider.</li>
           <li>It writes in short, plain sentences, for a reading age of about 11.</li>
           <li>Every AI answer is labelled, and reminds you to check against the provider’s documents.</li>
-          <li>Values read from pasted text are outlined in the form, so you can check each one.</li>
+          <li>Every value read from a document shows the exact words it came from, so you can check it against the original.</li>
+          <li>If a document leaves out something needed for the total cost, like the APR or the length, we say so and label the result an estimate. The AI never fills the gap with a guess.</li>
+          <li>Ask “where does it say that?” and the AI quotes the document word for word, or tells you it isn’t there.</li>
           <li>If you mention money worries, it points you to free help from MoneyHelper and StepChange.</li>
           <li>Pasted text is treated as data, never as instructions to the AI.</li>
         </ul>
+
+        <h2 className="h2">A pause before you commit</h2>
+        <p>
+          Showing information isn’t the same as understanding it. The “Before you sign” check sums up what you’d commit to, then asks one question about the total cost.
+          If the answer isn’t right, it explains why and lets you try again. It ends with “the choice is yours”, never with a recommendation.
+        </p>
 
         <h2 id="maths" className="h2 anchor-target">How we calculate</h2>
         <ul>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { defaults, EXAMPLES, risks, simulate } from "./finance";
+import { money } from "./format";
+import { defaults, EXAMPLES, moneyLabel, risks, simulate, understandingCheck } from "./finance";
 
 const close = (a: number, b: number, tol = 0.02) => expect(Math.abs(a - b)).toBeLessThanOrEqual(tol);
 
@@ -83,6 +84,53 @@ describe("bills", () => {
     const m = simulate("household", { monthly: 30, upfront: 0, term: 24, riseAmt: 3, exitFee: 0 });
     close(m.total, 30 * 12 + 33 * 12);
     close(m.onTop, 36);
+  });
+});
+
+describe("what-if", () => {
+  it("overpaying a loan finishes sooner and saves interest", () => {
+    const v = { amount: 5000, apr: 12.9, term: 36, fee: 0 };
+    const base = simulate("loan", v);
+    const extra = simulate("loan", v, 50);
+    expect(extra.end).toBeLessThan(base.end);
+    expect(extra.interest).toBeLessThan(base.interest);
+    close(extra.s[extra.s.length - 1].bal, 0);
+  });
+
+  it("matches the worked example: £5,000 at 12.9% APR over 36 months", () => {
+    const m = simulate("loan", { amount: 5000, apr: 12.9, term: 36, fee: 0 });
+    close(m.regular, 166.58, 0.5);
+    close(m.total, 5997, 5);
+  });
+
+  it("a longer term lowers the monthly payment but raises the total", () => {
+    const short = simulate("loan", { amount: 5000, apr: 12.9, term: 36 });
+    const long = simulate("loan", { amount: 5000, apr: 12.9, term: 48 });
+    expect(long.regular).toBeLessThan(short.regular);
+    expect(long.total).toBeGreaterThan(short.total);
+  });
+});
+
+describe("money label and understanding check", () => {
+  it("puts total and cost of borrowing on the label", () => {
+    const v = EXAMPLES[2].values;
+    const m = simulate("loan", v);
+    const label = moneyLabel("loan", v, m);
+    expect(label.rows.find((r) => r.label === "You pay back")?.value).toBe(money(m.total));
+    expect(label.parts.map((p) => p.label)).toEqual(["Borrowed", "Interest"]);
+  });
+
+  it("has exactly one right answer, and it's the total", () => {
+    const v = EXAMPLES[1].values;
+    const m = simulate("card", v);
+    const q = understandingCheck("card", v, m)!;
+    expect(q.options.filter((o) => o.correct)).toHaveLength(1);
+    expect(q.options.find((o) => o.correct)?.label).toBe(money(Math.round(m.total)));
+  });
+
+  it("asks about late fees when a plan is interest-free", () => {
+    const m = simulate("bnpl", EXAMPLES[0].values);
+    expect(understandingCheck("bnpl", EXAMPLES[0].values, m)?.question).toMatch(/on top/);
   });
 });
 

@@ -3,7 +3,7 @@ import { aiConfigured, anthropic, EXPLAIN_SYSTEM, FALLBACK_BETA, MODEL } from "@
 
 interface Turn { role: "user" | "assistant"; content: string }
 
-const MAX_CONTEXT = 6000;
+const MAX_CONTEXT = 9000;
 const MAX_TURN = 1500;
 const MAX_TURNS = 8;
 
