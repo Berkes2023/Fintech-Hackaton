@@ -68,6 +68,7 @@ export default function ResponsibleAIPage() {
           <li>We don’t give regulated financial advice, and we are not authorised by the FCA.</li>
           <li>We don’t connect to your bank, check your credit or process payments.</li>
           <li>We don’t keep your figures. They’re saved only in your browser. Questions you ask the AI are sent to the AI provider to be answered, and aren’t stored by us.</li>
+          <li>Our AI is Google Gemini on its free tier. Google’s terms allow it to use content sent on the free tier to improve its products. That’s one reason the privacy shield removes personal details before anything is sent. A paid tier would avoid this in a real launch.</li>
         </ul>
       </div>
     </div>

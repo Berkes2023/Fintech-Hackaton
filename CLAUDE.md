@@ -14,14 +14,14 @@ Users enter a commitment-based product (loan, credit card, overdraft, BNPL, subs
 
 ## Stack
 - Next.js 16 App Router, React 19, TypeScript, plain CSS (`src/app/globals.css`). No Tailwind.
-- Anthropic TypeScript SDK in route handlers only (`src/app/api/*`). Model: `claude-opus-5-5`.
+- Google Gemini via `@google/genai`, in route handlers only (`src/app/api/*`). Model set in one place: `MODEL` in `src/lib/ai.ts` (`gemini-3.8-flash`, falls back to `gemini-2.5-flash`; override with `GEMINI_MODEL`).
 - Vitest for unit tests. Deployed on Vercel.
 
 ## Map
 - `src/lib/finance.ts`: products, field definitions, `simulate()`, `explain()`, `risks()`. All money maths lives here and is pure.
 - `src/lib/finance.test.ts`: tests for the maths. Add one for every formula change.
 - `src/lib/store.ts`: browser-only state (draft + saved comparisons) in localStorage via `useSyncExternalStore`.
-- `src/lib/ai.ts`: server-only Anthropic client and system prompts.
+- `src/lib/ai.ts`: server-only Gemini client, model config, error mapping and system prompts. `src/lib/extraction.ts` validates the extraction JSON before the UI sees it.
 - `src/components/Header.tsx`: mega menu, driven by `src/lib/nav.ts`.
 - `src/components/Checker.tsx`: the cost checker. `ComparePanel.tsx`: comparison table and chart.
 - `src/components/HeroCard.tsx`: home page example card that rises as you scroll (sets `--p` from 0 to 1).
@@ -41,6 +41,6 @@ Users enter a commitment-based product (loan, credit card, overdraft, BNPL, subs
 ## Non-negotiables
 - Never present output as financial advice or tell the user which product to choose. Copy says “explain”, never “recommend”.
 - Every figure shown comes from `finance.ts`, never from the model.
-- AI features must degrade gracefully: if `ANTHROPIC_API_KEY` is missing the API returns 503 and the UI says AI is off.
+- AI features must degrade gracefully: if `GEMINI_API_KEY` is missing the API returns 503 and the UI says AI is off.
 - No real bank connections, payments or personal data storage. User figures stay in the browser.
 - Follow the design rules in `.claude/rules/code-style.md` (Revolut-style monochrome, pill controls).

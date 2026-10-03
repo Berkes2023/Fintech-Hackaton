@@ -1,11 +1,12 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { aiConfigured, anthropic, EXPLAIN_SYSTEM, FALLBACK_BETA, MODEL } from "@/lib/ai";
+import type { Content, GenerateContentResponse } from "@google/genai";
+import { aiConfigured, classify, EXPLAIN_SYSTEM, gemini, requestSignal, thinkingFor, withModel } from "@/lib/ai";
 
 interface Turn { role: "user" | "assistant"; content: string }
 
 const MAX_CONTEXT = 9000;
 const MAX_TURN = 1500;
 const MAX_TURNS = 8;
+const BLOCKED = ["SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION"];
 
 function parse(body: unknown): { context: string; turns: Turn[] } | null {
   if (!body || typeof body !== "object") return null;
@@ -21,55 +22,57 @@ function parse(body: unknown): { context: string; turns: Turn[] } | null {
   return { context: context.slice(0, MAX_CONTEXT), turns };
 }
 
+const STATUS = { rate_limited: 429, timeout: 504, bad_request: 400, upstream: 502 } as const;
+
 export async function POST(req: Request) {
   if (!aiConfigured()) return Response.json({ error: "not_configured" }, { status: 503 });
   const input = parse(await req.json().catch(() => null));
   if (!input) return Response.json({ error: "bad_request" }, { status: 400 });
 
-  const messages: Anthropic.Beta.BetaMessageParam[] = [
-    { role: "user", content: `PAGE DATA (recalculated for this question):\n${input.context}` },
-    ...input.turns,
-  ];
+  // Gemini uses "user" / "model" roles. The page data rides along in the first user turn.
+  const contents: Content[] = input.turns.map((t, i) => ({
+    role: t.role === "assistant" ? "model" : "user",
+    parts: [{ text: i === 0 ? `PAGE DATA (recalculated for this question):\n${input.context}\n\nQUESTION:\n${t.content}` : t.content }],
+  }));
 
-  const stream = anthropic().beta.messages.stream(
-    {
-      model: MODEL,
-      max_tokens: 4000,
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
-      output_config: { effort: "low" },
-      system: EXPLAIN_SYSTEM,
-      messages,
-    },
-    { signal: req.signal },
-  );
+  const signal = requestSignal(req);
+  let stream: AsyncGenerator<GenerateContentResponse>;
+  try {
+    stream = await withModel((model) => gemini().models.generateContentStream({
+      model,
+      contents,
+      config: { systemInstruction: EXPLAIN_SYSTEM, maxOutputTokens: 2048, temperature: 0.3, thinkingConfig: thinkingFor(model), abortSignal: signal },
+    }));
+  } catch (err) {
+    const code = classify(err, signal);
+    return Response.json({ error: code }, { status: STATUS[code] });
+  }
 
   const encoder = new TextEncoder();
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let finish: string | undefined, blocked = false, wrote = false;
       try {
-        for await (const event of stream) {
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            controller.enqueue(encoder.encode(event.delta.text));
-          }
+        for await (const chunk of stream) {
+          const text = chunk.text;
+          if (text) { controller.enqueue(encoder.encode(text)); wrote = true; }
+          finish = chunk.candidates?.[0]?.finishReason ?? finish;
+          if (chunk.promptFeedback?.blockReason) blocked = true;
         }
-        const final = await stream.finalMessage();
-        if (final.stop_reason === "refusal") {
-          controller.enqueue(encoder.encode("\n\n[The assistant couldn't answer that. Try asking in a different way.]"));
-        }
+        if (blocked || (finish && BLOCKED.includes(finish))) controller.enqueue(encoder.encode(`${wrote ? "\n\n" : ""}[The assistant couldn’t answer that. Try asking in a different way.]`));
+        else if (finish === "MAX_TOKENS") controller.enqueue(encoder.encode(" …"));
+        else if (!wrote) controller.enqueue(encoder.encode("[The assistant didn’t reply. Try asking again.]"));
       } catch (err) {
         if (!req.signal.aborted) {
-          const msg = err instanceof Anthropic.RateLimitError
-            ? "The assistant is busy. Try again in a minute."
+          const code = classify(err, signal);
+          const msg = code === "rate_limited" ? "The assistant is busy. Try again in a minute."
+            : code === "timeout" ? "The assistant took too long. Try again."
             : "Something went wrong reaching the assistant. Try again.";
           controller.enqueue(encoder.encode(`\n\n[${msg}]`));
         }
       } finally {
         controller.close();
       }
-    },
-    cancel() {
-      stream.abort();
     },
   });
 

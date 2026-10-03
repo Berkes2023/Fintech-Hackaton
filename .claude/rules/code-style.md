@@ -1,7 +1,7 @@
 # Code style and design rules
 
 ## TypeScript / React
-- Strict TypeScript. No `any`; use the SDK's own types for Anthropic data.
+- Strict TypeScript. No `any`; use the SDK's own types for Gemini data (`Content`, `Part`).
 - Server Components by default. Add `"use client"` only for components with state or browser APIs.
 - Keep components pure: no `Date.now()`, `Math.random()` or storage reads during render. Put them in event handlers or in `src/lib/store.ts`.
 - Money maths belongs in `src/lib/finance.ts` as pure functions. Components only format and display.

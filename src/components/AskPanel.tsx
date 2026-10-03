@@ -19,6 +19,7 @@ const CHIPS: Record<ProductType, string[]> = {
 const ERRORS: Record<number, string> = {
   503: "The AI assistant isn’t switched on for this site yet. Everything else on the page works without it.",
   429: "The assistant is busy. Try again in a minute.",
+  504: "The assistant took too long. Try again.",
 };
 
 export function AskPanel({ type, context, hasDocument = false }: { type: ProductType; context: () => string; hasDocument?: boolean }) {

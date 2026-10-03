@@ -58,6 +58,8 @@ const ERRORS: Record<string, string> = {
   invalid_json: "Couldn’t pick out the figures. Try pasting just the key facts section.",
   refused: "The assistant couldn’t read that. Try pasting just the key facts section.",
   bad_file: "That file couldn’t be read. Use a PDF, PNG or JPG under 3 MB.",
+  timeout: "Reading took too long. Try again, or paste just the key facts section.",
+  bad_request: "That couldn’t be read. Try pasting just the key facts section.",
 };
 
 const toBase64 = (f: File) => new Promise<string>((resolve, reject) => {

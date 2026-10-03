@@ -1,12 +1,12 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { aiConfigured, anthropic, EXTRACT_SYSTEM, FALLBACK_BETA, MODEL } from "@/lib/ai";
+import { createPartFromBase64, type Part } from "@google/genai";
+import { aiConfigured, classify, EXTRACT_SYSTEM, gemini, requestSignal, thinkingFor, withModel } from "@/lib/ai";
+import { forGemini, validateExtraction } from "@/lib/extraction";
 import { PRODUCT_TYPES, PRODUCTS } from "@/lib/finance";
 
 const MAX_TEXT = 8000;
 /** Base64 is ~4/3 the file size; Vercel caps request bodies at 4.5 MB, so files must be under ~3 MB. */
 const MAX_FILE_B64 = 4_000_000;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
-type ImageType = (typeof IMAGE_TYPES)[number];
 
 const CONDITION_KINDS = ["variable_rate", "late_fee", "promo_ends", "auto_renewal", "early_repayment_charge", "price_rise", "exit_fee", "credit_check", "other"];
 const str = (description: string) => ({ type: "string", description });
@@ -96,45 +96,55 @@ const INSTRUCTIONS = `Products and their field ids:\n${fieldSpec}\n\nTreat a BNP
 
 interface FileIn { type: string; data: string }
 
-function documentBlock(file: FileIn): Anthropic.Beta.BetaContentBlockParam | null {
+function documentPart(file: FileIn): Part | null {
   if (file.data.length > MAX_FILE_B64 || !/^[A-Za-z0-9+/=]+$/.test(file.data)) return null;
-  if (file.type === "application/pdf") return { type: "document", source: { type: "base64", media_type: "application/pdf", data: file.data } };
-  if ((IMAGE_TYPES as readonly string[]).includes(file.type)) return { type: "image", source: { type: "base64", media_type: file.type as ImageType, data: file.data } };
-  return null;
+  if (file.type !== "application/pdf" && !(IMAGE_TYPES as readonly string[]).includes(file.type)) return null;
+  return createPartFromBase64(file.data, file.type);
 }
+
+const BLOCKED = ["SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION"];
+const STATUS = { rate_limited: 429, timeout: 504, bad_request: 400, upstream: 502 } as const;
+const GEMINI_SCHEMA = forGemini(SCHEMA);
 
 export async function POST(req: Request) {
   if (!aiConfigured()) return Response.json({ error: "not_configured" }, { status: 503 });
   const body = (await req.json().catch(() => null)) as { text?: unknown; file?: unknown } | null;
   const text = typeof body?.text === "string" ? body.text.trim().slice(0, MAX_TEXT) : "";
   const fileIn = body?.file as FileIn | undefined;
-  const file = fileIn && typeof fileIn.type === "string" && typeof fileIn.data === "string" ? documentBlock(fileIn) : null;
+  const file = fileIn && typeof fileIn.type === "string" && typeof fileIn.data === "string" ? documentPart(fileIn) : null;
   if (fileIn && !file) return Response.json({ error: "bad_file" }, { status: 400 });
   if (!text && !file) return Response.json({ error: "bad_request" }, { status: 400 });
 
-  const content: Anthropic.Beta.BetaContentBlockParam[] = [];
-  if (file) content.push(file);
-  content.push({ type: "text", text: `${INSTRUCTIONS}${text ? `\n\n<pasted_text>\n${text}\n</pasted_text>` : "\n\nThe document is attached above."}` });
+  const parts: Part[] = [];
+  if (file) parts.push(file);
+  parts.push({ text: `${INSTRUCTIONS}${text ? `\n\n<pasted_text>\n${text}\n</pasted_text>` : "\n\nThe document is attached above."}` });
 
+  const signal = requestSignal(req);
   try {
-    const res = await anthropic().beta.messages.create({
-      model: MODEL,
-      max_tokens: 8000,
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
-      output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
-      system: EXTRACT_SYSTEM,
-      messages: [{ role: "user", content }],
-    });
-    if (res.stop_reason === "refusal") return Response.json({ error: "refused" }, { status: 422 });
-    const block = res.content.find((b) => b.type === "text");
-    if (!block || block.type !== "text") return Response.json({ error: "empty" }, { status: 502 });
-    return Response.json(JSON.parse(block.text));
+    const res = await withModel((model) => gemini().models.generateContent({
+      model,
+      contents: [{ role: "user", parts }],
+      config: {
+        systemInstruction: EXTRACT_SYSTEM,
+        responseMimeType: "application/json",
+        responseJsonSchema: GEMINI_SCHEMA,
+        temperature: 0,
+        maxOutputTokens: 8192,
+        thinkingConfig: thinkingFor(model),
+        abortSignal: signal,
+      },
+    }));
+    const finish = res.candidates?.[0]?.finishReason;
+    if (res.promptFeedback?.blockReason || (finish && BLOCKED.includes(finish))) return Response.json({ error: "refused" }, { status: 422 });
+    if (!res.text) return Response.json({ error: "empty" }, { status: 502 });
+    // Validate before the UI sees anything: malformed or invented structure is dropped here.
+    const clean = validateExtraction(JSON.parse(res.text));
+    if (!clean) return Response.json({ error: "invalid_json" }, { status: 502 });
+    return Response.json(clean);
   } catch (err) {
-    if (err instanceof Anthropic.RateLimitError) return Response.json({ error: "rate_limited" }, { status: 429 });
     if (err instanceof SyntaxError) return Response.json({ error: "invalid_json" }, { status: 502 });
-    if (err instanceof Anthropic.BadRequestError) return Response.json({ error: "bad_file" }, { status: 400 });
-    if (err instanceof Anthropic.APIError) return Response.json({ error: "upstream" }, { status: 502 });
-    throw err;
+    const code = classify(err, signal);
+    if (code === "bad_request") return Response.json({ error: file ? "bad_file" : "bad_request" }, { status: 400 });
+    return Response.json({ error: code }, { status: STATUS[code] });
   }
 }

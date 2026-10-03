@@ -17,7 +17,7 @@ Enter a loan, credit card, overdraft, Buy Now Pay Later plan, subscription or ho
 
 ```bash
 npm install
-cp .env.example .env.local   # add your ANTHROPIC_API_KEY to turn on the AI features
+cp .env.example .env.local   # add your GEMINI_API_KEY to turn on the AI features
 npm run dev                  # http://localhost:3000
 ```
 
@@ -33,7 +33,7 @@ Without an API key everything works except the two AI features, which say theyâ€
 
 - **Next.js 16** (App Router) + **TypeScript**, plain CSS design tokens in a Revolut-style monochrome system with a mega-menu header.
 - **`src/lib/finance.ts`**: all money maths as pure, tested functions (annuity repayments, card minimum payments, overdraft EAR, BNPL instalments, subscription and contract price rises).
-- **`src/app/api/explain`** and **`src/app/api/extract`**: Claude (`claude-opus-5-5`) via the Anthropic SDK. Chat answers stream; extraction uses structured JSON output. Inputs are size-capped and pasted text is treated as data.
+- **`src/app/api/explain`** and **`src/app/api/extract`**: Google Gemini (`gemini-3.8-flash`, free tier) via the `@google/genai` SDK. Chat answers stream; extraction uses structured JSON output, validated before the UI sees it. Inputs are size-capped and pasted text is treated as data.
 - **Privacy:** figures and comparisons are stored only in the browser (localStorage).
 
 ## Responsible design

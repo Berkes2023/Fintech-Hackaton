@@ -7,9 +7,9 @@ description: Security and user-protection review for Before You Sign. Use before
 Work through each item and report pass or fail with `file:line`.
 
 ## Secrets
-- `ANTHROPIC_API_KEY` is only read in `src/lib/ai.ts`, which imports `server-only`.
+- `GEMINI_API_KEY` is only read in `src/lib/ai.ts`, which imports `server-only`. It is never a `NEXT_PUBLIC_*` variable.
 - No `.env*` file is committed (`git ls-files | grep env`).
-- No key appears in client bundles: after `npm run build`, `grep -r "sk-ant" .next/static` finds nothing.
+- No key appears in client bundles: after `npm run build`, `grep -r "AIza" .next/static` finds nothing.
 
 ## API routes
 - Inputs are type-checked and size-capped before reaching the model (see `.claude/rules/api-conventions.md`).
