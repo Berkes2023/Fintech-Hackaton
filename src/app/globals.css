@@ -584,3 +584,15 @@ pre.code { margin: 16px 0 0; padding: 20px 24px; background: var(--color-ink); c
 .month-left { font-family: var(--font-display); font-weight: 500; font-size: 22px; margin-top: 4px; }
 .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; }
 .closing { padding: 18px 22px; border-left: 4px solid var(--color-ink); background: var(--color-mist); border-radius: 0 var(--radius-small) var(--radius-small) 0; }
+
+/* The person's own train of thought, rebuilt from their answers */
+.story { list-style: none; margin: 0; padding: 14px 18px; display: grid; gap: 4px; border-left: 3px solid var(--color-ink); background: var(--color-mist); border-radius: 0 var(--radius-list) var(--radius-list) 0; }
+.story li { font-size: 15px; color: var(--color-graphite); }
+.story li:last-child { color: var(--color-ink); font-weight: 600; }
+
+/* Future events: signed amount plus a tag that can't be misread */
+.event-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.event-amt { font-variant-numeric: tabular-nums; }
+.event-tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 8px; border-radius: var(--radius-pill); border: 1.5px solid var(--color-ink); white-space: nowrap; }
+
+.mlabel-rows dd { white-space: nowrap; }

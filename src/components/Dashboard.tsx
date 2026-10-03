@@ -8,7 +8,7 @@ import { Icon } from "./Icon";
 import { startGoal } from "./Journey";
 
 const TOOLS = [
-  { href: "/check#paste", title: "I’ve been offered something", desc: "Decode the small print", icon: "doc" },
+  { href: "/cost-checker#paste", title: "I’ve been offered something", desc: "Decode the small print", icon: "doc" },
   { href: "/compare", title: "Compare offers", desc: "Side by side, clause by clause", icon: "compare" },
   { href: "/commitments", title: "My commitments", desc: "Everything I already pay", icon: "chart" },
   { href: "/learn", title: "Learn the words", desc: "APR, EAR and more, in plain English", icon: "book" },
@@ -18,7 +18,7 @@ const TOOLS = [
 export function Dashboard() {
   const router = useRouter();
   const open = (g: Goal) => {
-    if (g === "car") { router.push("/decide/car"); return; }
+    if (g === "car") { router.push("/check?step=3"); return; }
     journeyStore.set(startGoal(journeyStore.get(), g));
     router.push("/plan?step=1");
   };

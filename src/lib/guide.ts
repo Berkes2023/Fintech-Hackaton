@@ -46,12 +46,12 @@ export function suggest(a: Answers): Suggestion[] {
     case "buy":
       if (a.buy) add({ id: `goal-${a.buy}`, title: "Plan it step by step", why: "Walk through the cost, your month and the ways to pay, before you commit.", goal: a.buy });
       if (a.when === "later" || a.when === "exploring") add({ id: "save", title: "Saving towards it instead", why: "See what putting money aside each month adds up to by the time you need it.", goal: "invest" });
-      if (a.when === "now") add({ id: "decode", title: "Check an offer you’ve been given", why: "Paste or snap the terms and see the real cost and the small print.", href: "/check#paste" });
+      if (a.when === "now") add({ id: "decode", title: "Check an offer you’ve been given", why: "Paste or snap the terms and see the real cost and the small print.", href: "/cost-checker#paste" });
       add({ id: "reverse", title: "What could a monthly budget cover?", why: "Start from what you can afford each month and see what it means over different lengths.", href: "/reverse" });
       break;
     case "owe":
       add({ id: "map", title: "See everything you already pay", why: "Your commitments on one timeline, with the monthly total and when each one ends.", href: "/commitments" });
-      add({ id: "card", title: "Check a credit card or overdraft", why: "See how long it takes to clear and what minimum payments really cost.", href: "/check?type=card" });
+      add({ id: "card", title: "Check a credit card or overdraft", why: "See how long it takes to clear and what minimum payments really cost.", href: "/cost-checker?type=card" });
       add({ id: "learn-min", title: "Why minimum payments take so long", why: "A short explainer with a real example.", href: "/learn#minimum" });
       break;
     case "ahead":
@@ -60,7 +60,7 @@ export function suggest(a: Answers): Suggestion[] {
       add({ id: "rates", title: "Where interest rates are now", why: "Bank Rate affects savings and borrowing.", href: "/rates" });
       break;
     case "offer":
-      add({ id: "decode", title: "Decode the offer", why: "Paste or snap the terms: real cost, hidden conditions and the exact sentences behind them.", href: "/check#paste" });
+      add({ id: "decode", title: "Decode the offer", why: "Paste or snap the terms: real cost, hidden conditions and the exact sentences behind them.", href: "/cost-checker#paste" });
       add({ id: "diff", title: "Got two offers? Compare them", why: "Clause by clause, with the biggest differences listed.", href: "/diff" });
       break;
     default:

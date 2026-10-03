@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { EXAMPLES, isProductType, type ProductType, type SavedOption, type Values } from "./finance";
 import { DEFAULT_SITUATION, type Situation } from "./journey";
-import { DEFAULT_CAR, type CarState } from "./sim";
+import { EMPTY_CAR, type CarState } from "./sim";
 
 // Everything here lives in this browser's localStorage only. Nothing is sent to a server.
 
@@ -68,7 +68,7 @@ export const journeyStore = createStore<Situation>("bys:journey", DEFAULT_SITUAT
 });
 
 /** The car decision journey. Browser-only. */
-export const carStore = createStore<CarState>("bys:car", DEFAULT_CAR, (x): x is CarState => {
+export const carStore = createStore<CarState>("bys:car2", EMPTY_CAR, (x): x is CarState => {
   const s = x as CarState;
-  return !!s && typeof s === "object" && !!s.purchase && !!s.picture && Array.isArray(s.picture.income) && Array.isArray(s.events) && !!s.credit;
+  return !!s && typeof s === "object" && !!s.purchase && !!s.picture && Array.isArray(s.picture.income) && Array.isArray(s.events) && !!s.credit && !!s.finance;
 });

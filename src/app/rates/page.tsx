@@ -53,7 +53,7 @@ export default async function RatesPage() {
                 Monthly values are the last reading in each month, carried forward when a month has no change. Refreshed daily.
               </p>
               <p className="small muted">This page explains the background. It doesn’t predict where rates will go, and it isn’t advice.</p>
-              <Link href="/check?type=loan" className="link small">See how a rate changes a loan’s cost</Link>
+              <Link href="/cost-checker?type=loan" className="link small">See how a rate changes a loan’s cost</Link>
             </div>
           </section>
         </>

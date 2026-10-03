@@ -27,7 +27,7 @@ export function CommitmentMap() {
       <div className="list stack" style={{ justifyItems: "start" }}>
         <p>Your map is empty. Add things you already pay from the cost checker (“I already pay this”), or load an example.</p>
         <div className="row">
-          <Link href="/check" className="btn btn-dark">Open the cost checker</Link>
+          <Link href="/cost-checker" className="btn btn-dark">Open the cost checker</Link>
           <button type="button" className="btn btn-light" onClick={() => commitmentsStore.set(EXAMPLE.map((e) => ({ ...e, id: newOptionId() })))}>Load an example</button>
         </div>
       </div>

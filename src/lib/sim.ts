@@ -52,9 +52,10 @@ export function position(p: Picture, m = 1): Explained {
   for (const i of p.essentials) if (active(i, m)) lines.push({ label: i.label, amount: -r2(toMonthly(i.amount, i.freq)), source: "you_told_us" });
   for (const i of p.discretionary) if (active(i, m)) lines.push({ label: i.label, amount: -r2(toMonthly(i.amount, i.freq)), source: "you_told_us" });
   for (const d of p.debts) if (active(d, m)) lines.push({ label: d.label, amount: -r2(toMonthly(d.amount, d.freq)), source: "you_told_us", note: d.endsIn ? `ends in month ${d.endsIn}` : undefined });
-  if (p.pension.amount > 0 && !p.pension.alreadyDeducted) lines.push({ label: "Pension contribution", amount: -r2(p.pension.amount), source: "you_told_us" });
+  if (p.pension.amount > 0 && !p.pension.alreadyDeducted) lines.push({ label: "Personal pension contribution", amount: -r2(p.pension.amount), source: "you_told_us" });
   for (const i of p.otherSaving) if (active(i, m)) lines.push({ label: i.label, amount: -r2(toMonthly(i.amount, i.freq)), source: "you_told_us" });
-  return { value: r2(lines.reduce((a, l) => a + l.amount, 0)), lines };
+  const shown = lines.filter((l) => l.amount !== 0);
+  return { value: r2(shown.reduce((a, l) => a + l.amount, 0)), lines: shown };
 }
 
 export const recurringIncome = (p: Picture, m = 1) => r2(p.income.filter((i) => active(i, m)).reduce((a, i) => a + toMonthly(i.amount, i.freq), 0));
@@ -165,6 +166,8 @@ export interface Month {
   normalLeft: number;
   oneOffIn: number;
   oneOffOut: number;
+  /** Each one-off amount in this month, signed. Never repeated in other months. */
+  oneOffs: { label: string; amount: number }[];
   left: number;
   buffer: number;
   cumulativeCost: number;
@@ -183,10 +186,12 @@ export function simulateMonths(p: Picture, events: FutureEvent[], sc: Scenario |
     let recurringOut = r2(recurringIn - pos.value);
     const existingDebt = debtPayments(p, m);
     let oneOffIn = 0, oneOffOut = 0;
+    const oneOffs: { label: string; amount: number }[] = [];
     const notes: string[] = [];
     for (const e of events) {
       if (e.recurrence === "one_off" && e.month === m) {
         if (e.direction === "in") oneOffIn += e.amount; else oneOffOut += e.amount;
+        oneOffs.push({ label: e.label, amount: e.direction === "in" ? e.amount : -e.amount });
         notes.push(`${e.label} ${e.direction === "in" ? "+" : "−"}${money(e.amount)} (one-off)`);
       }
       if (e.recurrence !== "one_off" && e.month <= m) {
@@ -195,15 +200,15 @@ export function simulateMonths(p: Picture, events: FutureEvent[], sc: Scenario |
         if (e.month === m) notes.push(`${e.label} ${e.recurrence === "recurring_from" ? "starts" : "stops"} (${money(e.amount)} a month)`);
       }
     }
-    for (const d of p.debts) if (d.endsIn === m) notes.push(`${d.label} finishes`);
+    for (const d of p.debts) if (d.endsIn === m && d.amount > 0) notes.push(`${d.label}: no longer paid`);
     const newPayment = sch ? (sch.payments[m - 1] ?? 0) : 0;
     if (sch && sc && sc.balloon > 0 && m === sc.startIn + sc.term) notes.push(`Final payment ${money(sc.balloon)}`);
-    if (sc && sc.upfrontFee > 0 && m === sc.startIn + 1) { oneOffOut += sc.upfrontFee; notes.push(`Arrangement fee −${money(sc.upfrontFee)} (one-off)`); }
+    if (sc && sc.upfrontFee > 0 && m === sc.startIn + 1) { oneOffOut += sc.upfrontFee; oneOffs.push({ label: "Arrangement fee", amount: -sc.upfrontFee }); notes.push(`Arrangement fee −${money(sc.upfrontFee)} (one-off)`); }
     if (sch) cost += (sch.interest[m - 1] ?? 0) + (m === sc!.startIn + 1 ? sc!.upfrontFee : 0) + (newPayment > 0 ? sc!.monthlyFee : 0);
     const normalLeft = recurringIn - recurringOut - newPayment;
     const left = normalLeft + oneOffIn - oneOffOut;
     buffer += left;
-    rows.push({ m, recurringIn: r2(recurringIn), recurringOut: r2(recurringOut), existingDebt, newPayment: r2(newPayment), normalLeft: r2(normalLeft), oneOffIn, oneOffOut, left: r2(left), buffer: r2(buffer), cumulativeCost: r2(cost), notes });
+    rows.push({ m, recurringIn: r2(recurringIn), recurringOut: r2(recurringOut), existingDebt, newPayment: r2(newPayment), normalLeft: r2(normalLeft), oneOffIn, oneOffOut, oneOffs, left: r2(left), buffer: r2(buffer), cumulativeCost: r2(cost), notes });
   }
   return rows;
 }
@@ -262,25 +267,28 @@ export function habit(amount: number, timesPerWeek: number) {
 
 /* ---------- what if ---------- */
 
-export type Lever = "waitBonus" | "deposit" | "aprUp" | "aprDown" | "term36" | "term60" | "rentUp" | "salaryUp" | "incomeDip" | "loanEnds" | "cutSpending";
+export type Lever = "waitBonus" | "deposit" | "apr12" | "term60" | "rentUp" | "loanEnds" | "salaryUp" | "aprUp" | "aprDown" | "term36" | "incomeDip" | "cutSpending";
 export const LEVERS: Record<Lever, string> = {
-  waitBonus: "Wait for my one-off money and add it to the deposit",
-  deposit: "Put £2,000 more down",
+  waitBonus: "Wait for my bonus and add it to the deposit",
+  deposit: "Put another £2,000 down",
+  apr12: "APR becomes 12%",
+  term60: "Choose 60 months",
+  rentUp: "Rent increases",
+  loanEnds: "My existing loan ends now",
+  salaryUp: "My salary changes",
   aprUp: "The APR is 2 points higher",
   aprDown: "The APR is 2 points lower",
   term36: "Choose 36 months",
-  term60: "Choose 60 months",
-  rentUp: "Rent goes up £100",
-  salaryUp: "My pay goes up £150",
   incomeDip: "My income falls 20% for 3 months",
-  loanEnds: "An existing loan ends now",
   cutSpending: "I cut a recurring expense by £50",
 };
+/** Amounts for the adjustable what-ifs. A negative salary change is a pay cut. */
+export interface LeverAmounts { rent: number; salary: number }
 
 export interface Case { picture: Picture; events: FutureEvent[]; scenario: Scenario }
 
 /** Each what-if is a pure change to the inputs, so the whole simulation recalculates from scratch. */
-export function applyLevers(c: Case, levers: Lever[]): Case {
+export function applyLevers(c: Case, levers: Lever[], amounts: LeverAmounts = { rent: 100, salary: 150 }): Case {
   let picture: Picture = { ...c.picture };
   let events = [...c.events];
   let sc: Scenario = { ...c.scenario };
@@ -290,17 +298,21 @@ export function applyLevers(c: Case, levers: Lever[]): Case {
       if (first) { sc = { ...sc, amount: Math.max(0, sc.amount - first.amount), startIn: first.month }; events = events.filter((e) => e.id !== first.id); }
     }
     if (l === "deposit") sc = { ...sc, amount: Math.max(0, sc.amount - 2000) };
+    if (l === "apr12") sc = { ...sc, apr: 12 };
     if (l === "aprUp") sc = { ...sc, apr: sc.apr + 2 };
     if (l === "aprDown") sc = { ...sc, apr: Math.max(0, sc.apr - 2) };
     if (l === "term36") sc = { ...sc, term: 36 };
     if (l === "term60") sc = { ...sc, term: 60 };
-    if (l === "rentUp") events = [...events, { id: "w-rent", label: "Rent rise (what if)", amount: 100, month: 1, direction: "out", recurrence: "recurring_from" }];
-    if (l === "salaryUp") events = [...events, { id: "w-pay", label: "Pay rise (what if)", amount: 150, month: 1, direction: "in", recurrence: "recurring_from" }];
+    if (l === "rentUp" && amounts.rent) events = [...events, { id: "w-rent", label: "Rent increase (what if)", amount: Math.abs(amounts.rent), month: 1, direction: "out", recurrence: amounts.rent > 0 ? "recurring_from" : "stops_from" }];
+    if (l === "salaryUp" && amounts.salary) events = [...events, { id: "w-pay", label: "Salary change (what if)", amount: Math.abs(amounts.salary), month: 1, direction: "in", recurrence: amounts.salary > 0 ? "recurring_from" : "stops_from" }];
     if (l === "incomeDip") {
       const dip = Math.round(recurringIncome(c.picture) * 0.2);
       events = [...events, { id: "w-dip1", label: "Income dip (what if)", amount: dip, month: 1, direction: "in", recurrence: "stops_from" }, { id: "w-dip2", label: "Income back (what if)", amount: dip, month: 4, direction: "in", recurrence: "recurring_from" }];
     }
-    if (l === "loanEnds" && picture.debts.length) picture = { ...picture, debts: picture.debts.slice(1) };
+    if (l === "loanEnds") {
+      const loan = picture.debts.find((d) => d.id === "loan" && d.amount > 0) ?? picture.debts.find((d) => d.amount > 0);
+      if (loan) picture = { ...picture, debts: picture.debts.filter((d) => d !== loan) };
+    }
     if (l === "cutSpending") events = [...events, { id: "w-cut", label: "Cut spending (what if)", amount: 50, month: 1, direction: "out", recurrence: "stops_from" }];
   }
   return { picture, events, scenario: sc };
@@ -327,46 +339,115 @@ export const BANNED = /bankrupt|you can afford|you can'?t afford|best option|bes
 
 export interface ActualOffer {
   scenario: Scenario;
-  /** Field ids the document didn't state (filled from the example, clearly labelled). */
+  /** Field ids the document didn't state (filled from your scenario, clearly labelled). */
   assumed: string[];
+  /** Important terms the document contains, with the sentence each came from. */
+  terms?: { title: string; quote: string }[];
 }
 
+/** The finance scenario being explored. null means "use the worked-out default". */
+export interface FinanceInput { amount: number | null; apr: number | null; term: number | null; fee: number }
+
+export type CarGoal = "car" | "home" | "improve" | "purchase" | "borrow" | "education" | "other";
+
 export interface CarState {
+  goal?: CarGoal;
   purchase: Purchase;
   picture: Picture;
   credit: CreditProfile;
   events: FutureEvent[];
-  /** Edits the person made to the example scenarios, by id. */
-  edits: Record<string, Partial<Pick<Scenario, "apr" | "term" | "upfrontFee">>>;
-  chosen: string;
+  finance: FinanceInput;
+  /** Which terms the simulation uses: the person's own scenario or their decoded offer. */
+  use: "mine" | "offer";
   offer?: ActualOffer;
 }
 
-const mi = (id: string, label: string, amount: number, extra: Partial<Item> = {}): Item => ({ id, label, amount, freq: "monthly", origin: "mock", ...extra });
+const mi = (id: string, label: string, amount = 0, extra: Partial<Item> = {}): Item => ({ id, label, amount, freq: "monthly", origin: "manual", ...extra });
+const db = (id: string, label: string, kind: DebtKind, amount = 0): Debt => ({ ...mi(id, label, amount), kind });
 
-/** A realistic example to start from, clearly marked as an example in the UI. */
-export const DEFAULT_CAR: CarState = {
-  purchase: { price: 25000, deposit: 5000, saved: 5000, preferredTerm: 48 },
-  picture: {
-    income: [mi("salary", "Take-home salary", 2500)],
-    essentials: [mi("rent", "Rent", 850), mi("bills", "Utilities and council tax", 230), mi("food", "Food", 250), mi("transport", "Transport", 120)],
-    discretionary: [mi("subs", "Subscriptions", 40), mi("out", "Eating out and takeaways", 140), mi("shop", "Shopping", 70)],
-    debts: [{ ...mi("loan", "Existing loan", 180, { endsIn: 5 }), kind: "loan" }],
-    reserves: { savings: 1500, emergency: 500 },
-    pension: { amount: 125, alreadyDeducted: true, employer: 75 },
-    otherSaving: [],
-  },
-  credit: { mode: "band", band: "good" },
-  events: [
-    { id: "bonus", label: "Work bonus", amount: 3000, month: 1, direction: "in", recurrence: "one_off" },
-    { id: "rent", label: "Rent goes up", amount: 100, month: 6, direction: "out", recurrence: "recurring_from" },
-  ],
-  edits: {},
-  chosen: "b",
+/** The fixed questions, by id. Every car journey asks these same fields. */
+export function blankPicture(): Picture {
+  return {
+    income: [mi("salary", "Take-home salary"), mi("other", "Other recurring income")],
+    essentials: [mi("rent", "Rent or mortgage"), mi("bills", "Utilities and bills"), mi("food", "Food"), mi("transport", "Transport"), mi("insurance", "Insurance")],
+    discretionary: [mi("subs", "Subscriptions"), mi("fun", "Shopping, entertainment and eating out"), mi("otherSpend", "Other regular spending")],
+    debts: [db("loan", "Loan repayments", "loan"), db("card", "Credit-card repayments", "card"), db("carfin", "Existing car finance", "car"), db("bnpl", "Buy Now Pay Later", "bnpl"), db("overdraft", "Overdraft or other borrowing", "overdraft")],
+    reserves: { savings: 0, emergency: 0 },
+    pension: { amount: 0, alreadyDeducted: false, employer: 0 },
+    otherSaving: [mi("regular", "Regular savings or investments"), mi("otherCommit", "Other regular commitments")],
+  };
+}
+
+/** Sets one fixed field's monthly amount. */
+export function withAmount<T extends Item>(list: T[], id: string, amount: number): T[] {
+  return list.map((i) => (i.id === id ? { ...i, amount, freq: "monthly" as Freq, origin: "manual" as Origin } : i));
+}
+export const amountOf = (list: Item[], id: string) => list.find((i) => i.id === id)?.amount ?? 0;
+
+/** Starts empty: nothing is assumed about the person. */
+export const EMPTY_CAR: CarState = {
+  purchase: { price: 0, deposit: 0, saved: 0, preferredTerm: 48 },
+  picture: blankPicture(),
+  credit: { mode: "unknown" },
+  events: [],
+  finance: { amount: null, apr: null, term: null, fee: 0 },
+  use: "mine",
 };
 
-/** The scenarios on screen: examples (with the person's edits) plus their actual offer if they decoded one. */
-export function carScenarios(st: CarState): Scenario[] {
-  const ex = exampleScenarios(st.purchase, st.credit).map((s) => ({ ...s, ...st.edits[s.id] }));
-  return st.offer ? [...ex, st.offer.scenario] : ex;
+/** "Use example figures": a realistic example, clearly marked as an example in the UI. */
+export function exampleCar(): CarState {
+  const p = blankPicture();
+  const fill = <T extends Item>(l: T[], v: Record<string, number>) => l.map((i) => (i.id in v ? { ...i, amount: v[i.id], origin: "mock" as Origin } : i));
+  return {
+    goal: "car",
+    purchase: { price: 25000, deposit: 5000, saved: 5000, preferredTerm: 48 },
+    picture: {
+      ...p,
+      income: fill(p.income, { salary: 2500 }),
+      essentials: fill(p.essentials, { rent: 850, bills: 230, food: 250, transport: 120 }),
+      discretionary: fill(p.discretionary, { subs: 40, fun: 210 }),
+      debts: fill(p.debts, { loan: 180 }).map((d) => (d.id === "loan" ? { ...d, endsIn: 5 } : d)),
+      reserves: { savings: 1500, emergency: 500 },
+      pension: { amount: 125, alreadyDeducted: true, employer: 75 },
+    },
+    credit: { mode: "band", band: "good" },
+    events: [
+      { id: "bonus", label: "Bonus", amount: 3000, month: 1, direction: "in", recurrence: "one_off" },
+      { id: "rent", label: "Rent increase", amount: 100, month: 6, direction: "out", recurrence: "recurring_from" },
+    ],
+    finance: { amount: null, apr: null, term: null, fee: 0 },
+    use: "mine",
+  };
+}
+export const DEFAULT_CAR = exampleCar();
+
+/** The example APR for the self-reported profile. "Good" when unknown, and always labelled as an example. */
+export const defaultApr = (c: CreditProfile) => EXAMPLE_APR[exampleBand(c).band ?? "good"];
+
+/** The one scenario the journey simulates: the decoded offer if chosen, otherwise the person's own scenario. */
+export function carScenario(st: CarState): Scenario {
+  if (st.use === "offer" && st.offer) return st.offer.scenario;
+  const f = st.finance;
+  return {
+    id: "mine", label: "Your scenario", source: "you_told_us",
+    amount: f.amount ?? toFinance(st.purchase), apr: f.apr ?? defaultApr(st.credit), term: f.term ?? st.purchase.preferredTerm ?? 48,
+    upfrontFee: f.fee, monthlyFee: 0, balloon: 0, startIn: 0,
+    fieldSources: { amount: f.amount === null ? "we_calculated" : "you_told_us", apr: f.apr === null ? "illustrative" : "you_told_us", term: "you_told_us", upfrontFee: "you_told_us" },
+  };
+}
+
+/** How an event is tagged everywhere, e.g. "ONE-OFF INCOME". A one-off is never shown as recurring. */
+export function eventTag(e: FutureEvent): string {
+  const kind = e.direction === "in" ? "INCOME" : "EXPENSE";
+  if (e.recurrence === "one_off") return `ONE-OFF ${kind}`;
+  return e.recurrence === "recurring_from" ? `RECURRING ${kind}` : `RECURRING ${kind} STOPS`;
+}
+/** The signed amount, e.g. "+£3,000" or "−£100 a month". */
+export const eventAmount = (e: FutureEvent) => `${e.direction === "in" ? "+" : "−"}${money(e.amount)}${e.recurrence === "one_off" ? "" : " a month"}`;
+
+/** One plain line for a future event, e.g. "£3,000 bonus next month — ONE-OFF INCOME". */
+export function eventLine(e: FutureEvent, monthName: (m: number) => string): string {
+  const what = e.label.charAt(0).toLowerCase() + e.label.slice(1);
+  const when = e.month === 1 ? "next month" : e.recurrence === "one_off" ? `in ${monthName(e.month)}` : `from ${monthName(e.month)}`;
+  return `${money(e.amount)}${e.recurrence === "one_off" ? "" : " a month"} ${what} ${when} — ${eventTag(e)}`;
 }

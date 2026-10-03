@@ -42,7 +42,7 @@ export function ComparePanel() {
 
   const edit = (o: SavedOption) => {
     draftStore.set({ type: o.type, values: { ...o.values }, example: !!o.example });
-    router.push(`/check?type=${o.type}`);
+    router.push(`/cost-checker?type=${o.type}`);
   };
   const remove = (id: string) => savedStore.set(saved.filter((o) => o.id !== id));
 
@@ -51,7 +51,7 @@ export function ComparePanel() {
       <div className="list stack" style={{ justifyItems: "start" }}>
         <p>Nothing saved yet. Use “Add to comparison” in the cost checker to line up to four options.</p>
         <div className="row">
-          <Link href="/check" className="btn btn-dark">Open the cost checker</Link>
+          <Link href="/cost-checker" className="btn btn-dark">Open the cost checker</Link>
           <button type="button" className="btn btn-light" onClick={() => savedStore.set(EXAMPLES)}>Load the laptop example</button>
         </div>
       </div>

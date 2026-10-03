@@ -56,8 +56,8 @@ export function Header() {
           </nav>
 
           <div className="header-actions">
-            <Link href="/check" className="text-link" onClick={close}>Check an offer</Link>
-            <Link href="/plan" className="btn btn-on-dark btn-sm" onClick={close}>Plan a purchase</Link>
+            <Link href="/cost-checker" className="text-link" onClick={close}>Check an offer</Link>
+            <Link href="/check" className="btn btn-on-dark btn-sm" onClick={close}>Think a decision through</Link>
           </div>
 
           <button type="button" className="menu-btn" aria-expanded={drawer} aria-controls="drawer" aria-label={drawer ? "Close menu" : "Open menu"} onClick={() => setDrawer(!drawer)}>
@@ -107,8 +107,8 @@ export function Header() {
                 </details>
               ))}
               <div className="drawer-actions">
-                <Link href="/plan" className="btn btn-dark" onClick={close}>Plan a purchase</Link>
-                <Link href="/check" className="btn btn-light" onClick={close}>Check an offer</Link>
+                <Link href="/check" className="btn btn-dark" onClick={close}>Think a decision through</Link>
+                <Link href="/cost-checker" className="btn btn-light" onClick={close}>Check an offer</Link>
               </div>
             </div>
           </div>

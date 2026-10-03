@@ -31,7 +31,7 @@ export default function LearnPage() {
         <p>
           The FCA calls it <b>persistent debt</b> when, over 18 months, you pay more in interest and fees than you pay off the balance. Your card provider must contact you if this happens, and offer help to pay it off faster if it continues.
         </p>
-        <p><Link href="/check?type=card">Try it in the cost checker</Link>: switch a card to “Only the minimum payment” and watch the time to clear it.</p>
+        <p><Link href="/cost-checker?type=card">Try it in the cost checker</Link>: switch a card to “Only the minimum payment” and watch the time to clear it.</p>
 
         <h2 id="bnpl" className="h2 anchor-target">Buy Now Pay Later, explained</h2>
         <p>

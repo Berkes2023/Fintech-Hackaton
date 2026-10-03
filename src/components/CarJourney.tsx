@@ -1,45 +1,54 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { DECISIONS, STAGES, type DecisionKind, type Stage } from "@/lib/decision";
 import { risks, simulate, understandingCheck } from "@/lib/finance";
 import { money, pct } from "@/lib/format";
 import type { Mark } from "@/lib/highlight";
+import type { Goal } from "@/lib/journey";
 import {
-  applyLevers, BAND_LABEL, carScenarios, DEFAULT_CAR, EXAMPLE_APR, exampleBand, habit, hiddenCost, impact, LEVERS, position,
-  recurringIncome, schedule, SCORE_SOURCE, simulateMonths, statements, toFinance,
-  type Band, type CarState, type Lever, type Scenario, type ScoreSource,
+  amountOf, applyLevers, BAND_LABEL, carScenario, debtPayments, EMPTY_CAR, eventAmount, eventLine, eventTag, exampleBand, exampleCar,
+  exampleScenarios, hiddenCost, impact, LEVERS, position, recurringIncome, schedule, SCORE_SOURCE, simulateMonths, statements, toFinance, toMonthly,
+  type Band, type CarState, type Item, type Lever, type Picture, type Scenario, type ScoreSource,
 } from "@/lib/sim";
-import { carStore, commitmentsStore, newOptionId, savedStore, thisMonth, MAX_SAVED } from "@/lib/store";
-import { CreditExplainer, EventEditor, ItemEditor, SourceBadge, WhyBreakdown } from "./CarParts";
+import { carStore, commitmentsStore, journeyStore, newOptionId, savedStore, thisMonth, MAX_SAVED } from "@/lib/store";
+import { CreditExplainer, EventEditor, SourceBadge, WhyBreakdown } from "./CarParts";
 import { Chart } from "./Chart";
 import { CommitCheck } from "./CommitCheck";
 import { CostScanner } from "./CostScanner";
 import { DocumentPanel } from "./DocumentPanel";
 import { Icon } from "./Icon";
+import { startGoal } from "./Journey";
 import { PasteFill, type FillResult } from "./PasteFill";
 
-const STEPS = [
-  { group: "The car", title: "The car" },
-  { group: "Your financial picture", title: "Income" },
-  { group: "Your financial picture", title: "Essential costs" },
-  { group: "Your financial picture", title: "Other spending" },
-  { group: "Your financial picture", title: "Existing borrowing" },
-  { group: "Your financial picture", title: "Savings and pension" },
-  { group: "Credit profile", title: "Credit profile" },
-  { group: "Coming up", title: "Coming up" },
-  { group: "Finance", title: "Explore finance" },
-  { group: "Impact", title: "Your month" },
-  { group: "Impact", title: "Over time" },
-  { group: "Impact", title: "Hidden cost" },
-  { group: "What if", title: "What if" },
-  { group: "Your offer", title: "Your actual offer" },
-  { group: "Summary", title: "Before you sign" },
-] as const;
-const GROUPS = [...new Set(STEPS.map((s) => s.group))];
+// One question at a time, in the order a person naturally thinks it through.
+const STEPS: { stage: Stage; title: string }[] = [
+  { stage: "Credit", title: "Credit profile" },
+  { stage: "Your idea", title: "What are you thinking about?" },
+  { stage: "The cost", title: "The car" },
+  { stage: "The cost", title: "Upfront money" },
+  { stage: "Finance", title: "How you might finance it" },
+  { stage: "Your situation", title: "Monthly income" },
+  { stage: "Your situation", title: "Normal spending" },
+  { stage: "Your situation", title: "Existing commitments" },
+  { stage: "Your situation", title: "Financial buffer" },
+  { stage: "Your situation", title: "Longer-term contributions" },
+  { stage: "Your future", title: "What you know about your future" },
+  { stage: "Simulation", title: "Your situation with this car" },
+  { stage: "Simulation", title: "Over time" },
+  { stage: "What if", title: "What if" },
+  { stage: "Before you sign", title: "Before you sign" },
+];
+const S = {
+  credit: 0, goal: 1, price: 2, deposit: 3, finance: 4, income: 5, spending: 6, borrowing: 7, buffer: 8, longterm: 9,
+  future: 10, impact: 11, timeline: 12, whatif: 13, summary: 14,
+} as const;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const GOAL_ORDER: DecisionKind[] = ["car", "home", "improve", "purchase", "borrowing", "other"];
+const TO_PLAN: Partial<Record<DecisionKind, Goal>> = { home: "home", improve: "improve", purchase: "purchase" };
 
 const CAR_OFFER = `DEMO / FICTIONAL - NOT A REAL FINANCIAL PRODUCT
 HIRE PURCHASE AGREEMENT - Provider X Motor Finance (fictional)
@@ -53,27 +62,38 @@ The vehicle remains the property of Provider X until all payments have been made
 Important: Guaranteed Asset Protection (GAP) insurance at £12.50 per month is added to your agreement unless you decline it before signing.
 You may settle early. A settlement charge of up to 58 days' interest may apply.`;
 
-function Money({ id, label, value, onChange, help, step = 100 }: { id: string; label: string; value: number; onChange: (n: number) => void; help?: string; step?: number }) {
+function Money({ id, label, value, onChange, help, step = 10 }: { id: string; label: string; value: number; onChange: (n: number) => void; help?: string; step?: number }) {
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <div className="input"><span>£</span><input id={id} type="number" min={0} step={step} inputMode="decimal" value={value || ""} placeholder="0" onChange={(e) => onChange(Number(e.target.value) || 0)} /></div>
+      <div className="input"><span>£</span><input id={id} type="number" min={0} step={step} inputMode="decimal" value={value || ""} placeholder="0" onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))} /></div>
       {help && <p className="help">{help}</p>}
     </div>
   );
 }
 
-/** The guided car decision: purchase, financial picture, credit profile, future events, finance, impact, what-ifs, the real offer, then a summary. */
-export function CarJourney() {
+type ListKey = "income" | "essentials" | "discretionary" | "debts" | "otherSaving";
+const sumList = (l: Item[]) => l.reduce((a, i) => a + toMonthly(i.amount, i.freq), 0);
+
+/**
+ * The car decision as a conversation: credit context, the idea, its cost, how it might be financed,
+ * the person's situation, what they know about their future, then a simulation they can question.
+ * CODE CALCULATES (sim.ts). AI only reads documents (Decode It) and never produces these numbers.
+ */
+export function CarJourney({ startAt = 0 }: { startAt?: number }) {
   const params = useSearchParams();
+  const router = useRouter();
   const st = carStore.use();
   const set = (patch: Partial<CarState>) => carStore.set({ ...st, ...patch });
-  const setPicture = (patch: Partial<CarState["picture"]>) => set({ picture: { ...st.picture, ...patch } });
-  const [step, setStep] = useState(() => Math.min(STEPS.length - 1, Math.max(0, Number(params.get("step")) || 0)));
+  const setPicture = (patch: Partial<Picture>) => set({ picture: { ...st.picture, ...patch } });
+  const setAmt = (k: ListKey, id: string, v: number) => setPicture({ [k]: st.picture[k].map((i: Item) => (i.id === id ? { ...i, amount: v, freq: "monthly", origin: "manual" } : i)) } as Partial<Picture>);
+  const [step, setStep] = useState(() => { const q = Number(params.get("step")); return q >= 1 && q <= STEPS.length ? q - 1 : startAt; });
   const [levers, setLevers] = useState<Lever[]>([]);
+  const [amounts, setAmounts] = useState({ rent: 100, salary: 150 });
   const [horizon, setHorizon] = useState(12);
-  const [habitAmt, setHabitAmt] = useState(8);
-  const [habitTimes, setHabitTimes] = useState(4);
+  const [full, setFull] = useState(false);
+  const [decode, setDecode] = useState(false);
+  const [knowScore, setKnowScore] = useState(st.credit.mode === "score");
   const [doc, setDoc] = useState<Omit<FillResult, "type" | "values"> | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -86,20 +106,24 @@ export function CarJourney() {
   const next = () => go(step + 1), back = () => go(step - 1);
 
   const p = st.picture;
+  const copy = DECISIONS.car;
   const financed = toFinance(st.purchase);
+  const sc: Scenario = carScenario(st);
+  const sch = schedule(sc);
   const pos = position(p);
-  const scs = carScenarios(st);
-  const chosen: Scenario = scs.find((s) => s.id === st.chosen) ?? scs[0];
-  const sch = schedule(chosen);
-  const imp = impact(p, chosen);
-  const fullTerm = Math.min(84, chosen.startIn + chosen.term);
-  const rows = simulateMonths(p, st.events, chosen, Math.max(24, fullTerm));
-  const bufferStart = p.reserves.savings + p.reserves.emergency;
-  const said = statements(rows.slice(0, Math.max(horizon, 3)), bufferStart, monthName);
-  const band = exampleBand(st.credit);
+  const imp = impact(p, sc);
   const income = recurringIncome(p);
-  const oneOffs = st.events.filter((e) => e.recurrence === "one_off" && e.direction === "in");
+  const spending = sumList(p.essentials) + sumList(p.discretionary);
+  const borrowing = debtPayments(p);
+  const longTerm = (p.pension.alreadyDeducted ? 0 : p.pension.amount) + sumList(p.otherSaving);
+  const bufferStart = p.reserves.savings + p.reserves.emergency;
+  const loan = p.debts.find((d) => d.id === "loan");
+  const rows = simulateMonths(p, st.events, sc, Math.max(24, Math.min(84, sc.startIn + sc.term)));
+  const without = simulateMonths(p, st.events, null, 12);
+  const band = exampleBand(st.credit);
+  const oneOffIns = st.events.filter((e) => e.recurrence === "one_off" && e.direction === "in");
   const show = (k: string) => { setActive(null); requestAnimationFrame(() => setActive(k)); };
+  const docSource = sc.source === "document" ? "document_says" : "we_calculated";
 
   const nav = (label = "Next", disabled = false) => (
     <div className="wizard-nav">
@@ -108,36 +132,59 @@ export function CarJourney() {
     </div>
   );
 
-  // The position card shown beside the financial-picture questions.
-  const positionCard = () => (
-    <aside className="card stack position-card" aria-label="Your monthly position">
+  // The person's own train of thought, rebuilt from what they've told us so far.
+  const story = () => {
+    const lines: string[] = [];
+    if (step > S.price && st.purchase.price) lines.push(`I like this ${money(st.purchase.price)} car.`);
+    if (step > S.deposit) lines.push(`I have ${money(st.purchase.deposit)} to put down, so I may need about ${money(financed)} of finance.`);
+    if (step > S.finance) lines.push(`At ${pct(sc.apr)} APR over ${sc.term} months, that’s about ${money(sch.regular, true)} a month.`);
+    if (step > S.income && income) lines.push(`I take home about ${money(income)} a month.`);
+    if (step > S.spending && spending) lines.push(`My normal spending is about ${money(spending)} a month.`);
+    if (step > S.borrowing && borrowing) lines.push(`I already repay ${money(borrowing)} a month${loan?.endsIn ? `, and my loan’s last payment is in ${monthName(loan.endsIn - 1)}` : ""}.`);
+    if (step > S.buffer && bufferStart) lines.push(`I have ${money(bufferStart)} as a buffer.`);
+    if (step > S.future) for (const e of st.events.slice(0, 3)) lines.push(`${eventLine(e, monthName)}.`);
+    if (!lines.length) return null;
+    return (
+      <ol className="story" aria-label="What you’ve told us so far">
+        {lines.map((l) => <li key={l}>{l}</li>)}
+      </ol>
+    );
+  };
+
+  const situationCard = () => (
+    <aside className="card stack position-card" aria-label="Your situation so far">
       <span className="caption">Your normal month, so far</span>
       <b className="h1">{money(pos.value)}</b>
-      <p className="small muted">left after regular costs. One-off money isn’t included.</p>
+      <p className="small muted">left after regular costs, before the car. One-off money isn’t included.</p>
       <WhyBreakdown title="Regular income minus regular costs, from what you’ve told us." result={pos} />
     </aside>
+  );
+
+  const fields = (k: ListKey, list: [string, string, string?][]) => (
+    <div className="journey-fields">
+      {list.map(([id, label, help]) => <Money key={id} id={`f-${id}`} label={label} help={help} value={amountOf(p[k], id)} onChange={(v) => setAmt(k, id, v)} />)}
+    </div>
   );
 
   const onFill = (r: FillResult) => {
     const v = r.values;
     const has = (k: string) => r.filled.includes(k);
-    const amount = has("amount") ? Number(v.amount) : has("price") ? Number(v.price) : has("balance") ? Number(v.balance) : financed;
-    const apr = has("apr") ? Number(v.apr) : chosen.apr;
-    const term = has("term") ? Number(v.term) : has("n") ? Number(v.n) : chosen.term;
-    const fee = has("fee") ? Number(v.fee) : 0;
-    const assumed = [!(has("amount") || has("price") || has("balance")) && "amount", !has("apr") && "APR", !(has("term") || has("n")) && "term"].filter(Boolean) as string[];
+    const mine = carScenario({ ...st, use: "mine" });
+    const amount = has("amount") ? Number(v.amount) : has("balance") ? Number(v.balance) : mine.amount;
+    const assumed = [!(has("amount") || has("balance")) && "amount", !has("apr") && "APR", !(has("term") || has("n")) && "term"].filter(Boolean) as string[];
     const scenario: Scenario = {
-      id: "offer", label: "Your actual offer", source: "document", amount, apr, term, upfrontFee: fee, monthlyFee: 0, balloon: 0, startIn: 0,
-      lateFee: has("lateFee") ? Number(v.lateFee) : undefined,
+      id: "offer", label: "Your offer", source: "document", amount,
+      apr: has("apr") ? Number(v.apr) : mine.apr, term: has("term") ? Number(v.term) : has("n") ? Number(v.n) : mine.term,
+      upfrontFee: has("fee") ? Number(v.fee) : 0, monthlyFee: 0, balloon: 0, startIn: 0, lateFee: has("lateFee") ? Number(v.lateFee) : undefined,
       fieldSources: {
-        amount: assumed.includes("amount") ? "illustrative" : "document_says", apr: assumed.includes("APR") ? "illustrative" : "document_says",
-        term: assumed.includes("term") ? "illustrative" : "document_says", upfrontFee: has("fee") ? "document_says" : "illustrative", lateFee: has("lateFee") ? "document_says" : undefined,
+        amount: assumed.includes("amount") ? "you_told_us" : "document_says", apr: assumed.includes("APR") ? "you_told_us" : "document_says",
+        term: assumed.includes("term") ? "you_told_us" : "document_says", upfrontFee: has("fee") ? "document_says" : "you_told_us", lateFee: has("lateFee") ? "document_says" : undefined,
       },
     };
     const { type: _t, values: _v, ...rest } = r;
     void _t; void _v;
     setDoc(rest);
-    set({ offer: { scenario, assumed }, chosen: "offer" });
+    set({ offer: { scenario, assumed, terms: r.conditions.map((c) => ({ title: c.title, quote: c.quote })) }, use: "offer" });
   };
 
   const marks: Mark[] = doc ? [
@@ -145,370 +192,469 @@ export function CarJourney() {
     ...doc.conditions.map((c, i) => ({ key: `cond-${i}`, quote: c.quote })),
   ].filter((x) => x.quote) : [];
 
-  const loanValues = { amount: chosen.amount, apr: chosen.apr, term: chosen.term, fee: chosen.upfrontFee, lateFee: chosen.lateFee ?? 15 };
+  const loanValues = { amount: sc.amount, apr: sc.apr, term: sc.term, fee: sc.upfrontFee, lateFee: sc.lateFee ?? 0 };
   const loanM = simulate("loan", loanValues);
+  const stageIdx = STAGES.indexOf(STEPS[step].stage);
 
   return (
     <div className="journey car">
       <ol className="journey-steps" aria-label="Progress">
-        {GROUPS.map((g) => {
-          const first = STEPS.findIndex((s) => s.group === g);
-          const last = STEPS.length - 1 - [...STEPS].reverse().findIndex((s) => s.group === g);
-          const state = step > last ? "done" : step >= first ? "now" : undefined;
+        {STAGES.map((g, gi) => {
+          const first = STEPS.findIndex((s) => s.stage === g);
+          const state = gi < stageIdx ? "done" : gi === stageIdx ? "now" : undefined;
           return (
             <li key={g} className={state}>
               <button type="button" onClick={() => first <= step && go(first)} disabled={first > step} aria-current={state === "now" ? "step" : undefined}>
-                <span className="journey-n">{state === "done" ? "✓" : GROUPS.indexOf(g) + 1}</span><span className="journey-t">{g}</span>
+                <span className="journey-n">{state === "done" ? "✓" : gi + 1}</span><span className="journey-t">{g}</span>
               </button>
             </li>
           );
         })}
       </ol>
-      <p className="small muted">Step {step + 1} of {STEPS.length} · {STEPS[step].title}{step === 0 && " · Example figures are filled in to start; change any of them."}</p>
+      <p className="small muted">Step {step + 1} of {STEPS.length} · {STEPS[step].title}</p>
+      {step > S.price && story()}
 
-      {step === 0 && (
-        <section className="stack journey-card">
-          <h2 className="h1">Tell us about the car</h2>
-          <div className="journey-fields">
-            <Money id="c-price" label="Car price" value={st.purchase.price} onChange={(price) => set({ purchase: { ...st.purchase, price } })} />
-            <Money id="c-dep" label="Deposit you could put down" value={st.purchase.deposit} onChange={(deposit) => set({ purchase: { ...st.purchase, deposit } })} help="Including any part-exchange." />
-            <Money id="c-saved" label="Already saved towards it" value={st.purchase.saved} onChange={(saved) => set({ purchase: { ...st.purchase, saved } })} help="Separate from your emergency savings." />
-            <div className="field"><label htmlFor="c-term">How long you’d like to pay (if you know)</label><div className="input"><select id="c-term" value={st.purchase.preferredTerm ?? 0} onChange={(e) => set({ purchase: { ...st.purchase, preferredTerm: Number(e.target.value) || undefined } })}><option value={0}>Not sure</option>{[24, 36, 48, 60].map((t) => <option key={t} value={t}>{t} months</option>)}</select></div></div>
-          </div>
-          <div className="big-fact"><span className="caption">Potential amount to finance <SourceBadge source="we_calculated" /></span><b>{money(financed)}</b><span className="small">{money(st.purchase.price)} car − {money(st.purchase.deposit)} deposit</span></div>
-          {nav()}
-        </section>
-      )}
-
-      {step >= 1 && step <= 5 && (
-        <div className="picture-layout">
-          <section className="stack journey-card">
-            {step === 1 && (<>
-              <h2 className="h1">Your income</h2>
-              <p className="muted">What comes in regularly, after tax. Rough is fine. Everything stays in your browser.</p>
-              <ItemEditor idPrefix="inc" items={p.income} onChange={(income) => setPicture({ income })} suggestions={["Take-home salary", "Second job", "Benefits", "Other regular income"]} />
-              <p className="small muted">Bonuses, refunds and other one-off money come later, so they’re never mistaken for regular income.</p>
-            </>)}
-            {step === 2 && (<>
-              <h2 className="h1">Essential costs</h2>
-              <p className="muted">The things you have to pay.</p>
-              <ItemEditor idPrefix="ess" items={p.essentials} onChange={(essentials) => setPicture({ essentials })} suggestions={["Rent", "Mortgage", "Utilities and council tax", "Food", "Transport", "Insurance", "Childcare", "Phone and broadband"]} />
-            </>)}
-            {step === 3 && (<>
-              <h2 className="h1">Other regular spending</h2>
-              <p className="muted">Things you choose to spend on regularly. No judgement: it just makes the picture realistic.</p>
-              <ItemEditor idPrefix="dis" items={p.discretionary} onChange={(discretionary) => setPicture({ discretionary })} suggestions={["Subscriptions", "Eating out and takeaways", "Entertainment", "Shopping", "Gym", "Hobbies"]} />
-            </>)}
-            {step === 4 && (<>
-              <h2 className="h1">Existing borrowing</h2>
-              <p className="muted">What you already repay each month, and when each one ends.</p>
-              <ItemEditor idPrefix="dbt" debts items={p.debts} onChange={(debts) => setPicture({ debts })} suggestions={["Personal loan", "Car finance", "Credit card", "Overdraft", "Buy Now Pay Later"]} />
-            </>)}
-            {step === 5 && (<>
-              <h2 className="h1">Savings and pension</h2>
-              <div className="journey-fields">
-                <Money id="r-sav" label="Savings" value={p.reserves.savings} onChange={(savings) => setPicture({ reserves: { ...p.reserves, savings } })} />
-                <Money id="r-em" label="Emergency fund" value={p.reserves.emergency} onChange={(emergency) => setPicture({ reserves: { ...p.reserves, emergency } })} />
-                <Money id="r-pen" label="Your pension contribution each month" value={p.pension.amount} onChange={(amount) => setPicture({ pension: { ...p.pension, amount } })} step={10} />
-                <Money id="r-emp" label="Employer contribution (if known)" value={p.pension.employer ?? 0} onChange={(employer) => setPicture({ pension: { ...p.pension, employer } })} step={10} help="For information only: it isn’t paid from your month." />
-              </div>
-              <label className="quiz-option"><input type="checkbox" checked={p.pension.alreadyDeducted} onChange={(e) => setPicture({ pension: { ...p.pension, alreadyDeducted: e.target.checked } })} /> My pension is already taken out before my take-home pay</label>
-              <p className="small muted">Workplace pensions usually are, so we don’t count them twice. We don’t try to predict retirement outcomes.</p>
-              <ItemEditor idPrefix="sav" items={p.otherSaving} onChange={(otherSaving) => setPicture({ otherSaving })} suggestions={["Regular savings", "Investing each month"]} />
-            </>)}
-            {nav()}
-          </section>
-          {positionCard()}
-        </div>
-      )}
-
-      {step === 6 && (
-        <section className="stack journey-card">
-          <h2 className="h1">Your credit profile</h2>
-          <p className="muted">Do you know your credit score or profile? <SourceBadge source="you_told_us" /> Whatever you choose is self-reported. Before You Sign never calculates a credit score.</p>
+      {step === S.credit && (
+        <section className="stack journey-card" aria-labelledby="q-credit">
+          <h2 id="q-credit" className="h1">How would you describe your credit profile?</h2>
+          <p className="muted">It may influence the finance options and rates you’re offered. It’s a different question from whether a commitment fits your situation. Whatever you choose stays self-reported.</p>
           <div className="choice-grid">
-            {([["score", "Enter my score"], ["band", "Choose an approximate profile"], ["unknown", "I don’t know"]] as const).map(([mode, label]) => (
-              <button key={mode} type="button" className={`choice${st.credit.mode === mode ? " on" : ""}`} onClick={() => set({ credit: { ...st.credit, mode } })}><b style={{ fontSize: 20 }}>{label}</b></button>
+            {(Object.keys(BAND_LABEL) as Band[]).map((b) => (
+              <button key={b} type="button" className={`choice${!knowScore && st.credit.mode === "band" && st.credit.band === b ? " on" : ""}`} aria-pressed={!knowScore && st.credit.mode === "band" && st.credit.band === b} onClick={() => { setKnowScore(false); set({ credit: { mode: "band", band: b } }); }}><b>{BAND_LABEL[b]}</b></button>
             ))}
+            <button type="button" className={`choice${!knowScore && st.credit.mode === "unknown" ? " on" : ""}`} aria-pressed={!knowScore && st.credit.mode === "unknown"} onClick={() => { setKnowScore(false); set({ credit: { mode: "unknown" } }); }}><b>I don’t know</b></button>
           </div>
-          {st.credit.mode === "score" && (
+          <button type="button" className={`link${knowScore ? " on" : ""}`} onClick={() => { setKnowScore(true); set({ credit: { mode: "score", score: st.credit.score ?? { value: 0, source: "experian" } } }); }}>I know my credit score</button>
+          {knowScore && (
             <div className="journey-fields">
-              <div className="field"><label htmlFor="cs-v">Your score</label><div className="input"><input id="cs-v" type="number" min={0} value={st.credit.score?.value ?? ""} onChange={(e) => set({ credit: { ...st.credit, score: { value: Number(e.target.value) || 0, source: st.credit.score?.source ?? "experian" } } })} /></div></div>
-              <div className="field"><label htmlFor="cs-s">From</label><div className="input"><select id="cs-s" value={st.credit.score?.source ?? "experian"} onChange={(e) => set({ credit: { ...st.credit, score: { value: st.credit.score?.value ?? 0, source: e.target.value as ScoreSource } } })}>{(Object.keys(SCORE_SOURCE) as ScoreSource[]).map((s) => <option key={s} value={s}>{SCORE_SOURCE[s]}</option>)}</select></div></div>
+              <div className="field"><label htmlFor="cs-v">Your score</label><div className="input"><input id="cs-v" type="number" min={0} value={st.credit.score?.value || ""} placeholder="e.g. 850" onChange={(e) => set({ credit: { mode: "score", score: { value: Number(e.target.value) || 0, source: st.credit.score?.source ?? "experian" } } })} /></div></div>
+              <div className="field"><label htmlFor="cs-s">From</label><div className="input"><select id="cs-s" value={st.credit.score?.source ?? "experian"} onChange={(e) => set({ credit: { mode: "score", score: { value: st.credit.score?.value ?? 0, source: e.target.value as ScoreSource } } })}>{(Object.keys(SCORE_SOURCE) as ScoreSource[]).map((s) => <option key={s} value={s}>{s === "other" ? "Other" : SCORE_SOURCE[s]}</option>)}</select></div><p className="help">Different agencies use different scales, so we never convert or compare them.</p></div>
             </div>
           )}
-          {st.credit.mode === "band" && (
-            <div className="choice-grid">
-              {(Object.keys(BAND_LABEL) as Band[]).map((b) => <button key={b} type="button" className={`choice${st.credit.band === b ? " on" : ""}`} onClick={() => set({ credit: { ...st.credit, band: b } })}><b>{BAND_LABEL[b]}</b></button>)}
-            </div>
-          )}
-          <p className="list small">{band.note} Scores from different agencies use different scales, so we never treat them as interchangeable.</p>
+          <p className="small">{band.note}</p>
           <CreditExplainer />
           {nav()}
         </section>
       )}
 
-      {step === 7 && (
-        <section className="stack journey-card">
-          <h2 className="h1">What doesn’t your bank know yet?</h2>
-          <p className="muted">Your bank sees your past transactions. Your credit profile reflects your borrowing history. Only you know what’s coming next: a bonus, a pay rise, a loan ending, a rent rise.</p>
-          <EventEditor events={st.events} onChange={(events) => set({ events })} monthName={monthName} />
-          <p className="small"><b>Your regular income stays {money(income)} a month.</b> One-off money is shown in its own month and never added to your regular income.</p>
-          {nav("Explore finance")}
-        </section>
-      )}
-
-      {step === 8 && (
-        <section className="stack" style={{ gap: 20 }}>
-          <h2 className="h1">Explore potential finance</h2>
-          <p className="muted">Financing {money(financed)}. {band.note}</p>
-          <p className="estimate-note small"><b>Example scenarios at illustrative rates.</b> Not offers or market data. Edit any rate, term or fee. When you have a real offer, decode it in step 14.</p>
-          <div className="option-grid">
-            {scs.map((s) => {
-              const sc = schedule(s);
+      {step === S.goal && (
+        <section className="stack journey-card" aria-labelledby="q-goal">
+          <h2 id="q-goal" className="h1">What are you thinking about?</h2>
+          <div className="choice-grid">
+            {GOAL_ORDER.map((g) => {
+              const d = DECISIONS[g];
+              const pick = () => {
+                if (g === "car") { set({ goal: "car" }); go(S.price); return; }
+                const plan = TO_PLAN[g];
+                if (plan) { journeyStore.set(startGoal(journeyStore.get(), plan)); router.push("/plan?step=1"); return; }
+                router.push(g === "borrowing" ? "/commitments" : "/start");
+              };
               return (
-                <div key={s.id} className={`option${chosen.id === s.id ? " on" : ""}`}>
-                  <div className="row" style={{ justifyContent: "space-between" }}><b className="h3">{s.label}</b><SourceBadge source={s.source === "document" ? "document_says" : "illustrative"} /></div>
-                  {s.source !== "document" ? (
-                    <div className="scenario-edit">
-                      <label>APR <input type="number" step={0.1} min={0} value={s.apr} onChange={(e) => set({ edits: { ...st.edits, [s.id]: { ...st.edits[s.id], apr: Number(e.target.value) || 0 } } })} />%</label>
-                      <label>Term <select value={s.term} onChange={(e) => set({ edits: { ...st.edits, [s.id]: { ...st.edits[s.id], term: Number(e.target.value) } } })}>{[24, 36, 48, 60, 72].map((t) => <option key={t} value={t}>{t}m</option>)}</select></label>
-                      <label>Fee £<input type="number" step={1} min={0} value={s.upfrontFee} onChange={(e) => set({ edits: { ...st.edits, [s.id]: { ...st.edits[s.id], upfrontFee: Number(e.target.value) || 0 } } })} /></label>
-                    </div>
-                  ) : <p className="small muted">{pct(s.apr)} APR · {s.term} months · fee {money(s.upfrontFee)}</p>}
-                  <dl className="option-facts">
-                    <div><dt>Each month</dt><dd>{money(sc.regular, true)}</dd></div>
-                    <div><dt>Total repaid</dt><dd>{money(sc.total)}</dd></div>
-                    <div><dt>Borrowing cost</dt><dd>{money(sc.cost)}</dd></div>
-                    <div><dt>Leaves a normal month</dt><dd>{money(pos.value - sc.regular)}</dd></div>
-                  </dl>
-                  <button type="button" className={chosen.id === s.id ? "btn btn-dark btn-sm" : "btn btn-light btn-sm"} onClick={() => set({ chosen: s.id })}>{chosen.id === s.id ? "Exploring this one" : "Explore this one"}</button>
-                </div>
+                <button key={g} type="button" className={`choice${st.goal === g ? " on" : ""}`} onClick={pick}>
+                  <b>{d.label}</b>
+                  <span className="small muted">{d.status === "full" ? "Full journey" : d.status === "simplified" ? "Simplified for now" : "We’ll point you somewhere useful"}</span>
+                </button>
               );
             })}
           </div>
-          {(() => {
-            const all = scs.map((s) => ({ s, sc: schedule(s) }));
-            const lowTotal = all.reduce((a, b) => (b.sc.total < a.sc.total ? b : a));
-            const lowMonthly = all.reduce((a, b) => (b.sc.regular < a.sc.regular ? b : a));
-            return lowTotal.s.id !== lowMonthly.s.id ? <p className="list small">{lowTotal.s.label} has the lowest total repayment but a higher monthly payment. {lowMonthly.s.label} has the lowest monthly payment, but you’d repay {money(lowMonthly.sc.total - lowTotal.sc.total)} more overall. Which matters more is your call.</p> : null;
-          })()}
-          {band.band === null && <p className="small muted">Example rates by profile: Excellent {EXAMPLE_APR.excellent}%, Good {EXAMPLE_APR.good}%, Fair {EXAMPLE_APR.fair}%, Needs work {EXAMPLE_APR.needs_work}%.</p>}
-          {nav("See it in my month")}
+          {nav()}
         </section>
       )}
 
-      {step === 9 && (
-        <section className="stack" style={{ gap: 20 }}>
-          <h2 className="h1">{chosen.label} in your monthly life</h2>
-          <div className="before-after">
-            <div className="card stack"><span className="caption">Before the car</span><b className="h1">{money(imp.before.value)}</b><span className="small muted">left in a normal month</span></div>
-            <div className="ba-arrow" aria-hidden="true"><Icon name="arrow" size={28} /></div>
-            <div className="card stack emph-card"><span className="caption">After the car</span><b className="h1">{money(imp.after)}</b><span className="small">left in a normal month</span></div>
-            <div className="card stack"><span className="caption">Difference</span><b className="h1">−{money(imp.payment, true)}</b><span className="small muted">a month</span></div>
+      {step === S.price && (
+        <section className="stack journey-card" aria-labelledby="q-price">
+          <h2 id="q-price" className="h1">{copy.cost}</h2>
+          <div className="journey-fields">
+            <Money id="c-price" label="Car price" step={500} value={st.purchase.price} onChange={(price) => set({ purchase: { ...st.purchase, price } })} />
           </div>
-          <div className="tiles">
-            <div className="tile"><span className="caption">Payment <SourceBadge source="we_calculated" /></span><span className="v">{money(imp.payment, true)}</span><span className="small muted">a month</span></div>
-            <div className="tile"><span className="caption">Share of take-home pay</span><span className="v">{pct(imp.pctOfIncome)}</span><span className="small muted">of {money(income)}</span></div>
-            <div className="tile"><span className="caption">All borrowing repayments</span><span className="v">{money(imp.totalCommitments, true)}</span><span className="small muted">{money(imp.existingDebt)} existing + car</span></div>
-            <div className="tile"><span className="caption">Cash buffer now</span><span className="v">{money(imp.bufferNow)}</span><span className="small muted">savings + emergency fund</span></div>
+          <div className="row">
+            <button type="button" className="link small" onClick={() => { carStore.set({ ...exampleCar(), credit: st.credit }); setDoc(null); }}>Use example figures (a £25,000 car)</button>
+            <span className="small muted">Fills every step with an example you can change.</span>
           </div>
-          <WhyBreakdown title={`What a normal month leaves after the ${chosen.label.toLowerCase()} payment.`} result={imp.before}
-            extra={[{ label: `${chosen.label} payment`, amount: -imp.payment, source: chosen.source === "document" ? "document_says" : "we_calculated" }]}
-            note={oneOffs.length ? `${oneOffs.map((o) => o.label).join(", ")} ${oneOffs.length > 1 ? "are" : "is"} excluded from regular monthly income because ${oneOffs.length > 1 ? "they’re" : "it’s"} one-off.` : undefined} />
-          {nav("See it over time")}
+          {nav("Next", st.purchase.price <= 0)}
         </section>
       )}
 
-      {step === 10 && (
-        <section className="stack" style={{ gap: 20 }}>
-          <h2 className="h1">Over time</h2>
-          <div className="segmented" role="group" aria-label="How far ahead">
-            {[3, 6, 12, 24, fullTerm].filter((v, i, a) => a.indexOf(v) === i).map((h) => <button key={h} type="button" aria-pressed={horizon === h} onClick={() => setHorizon(h)}>{h === fullTerm && h > 24 ? `Full term (${h}m)` : `${h} months`}</button>)}
+      {step === S.deposit && (
+        <section className="stack journey-card" aria-labelledby="q-dep">
+          <h2 id="q-dep" className="h1">{copy.upfront}</h2>
+          <div className="journey-fields">
+            <Money id="c-dep" label="Deposit" step={500} value={st.purchase.deposit} onChange={(deposit) => set({ purchase: { ...st.purchase, deposit: Math.min(deposit, st.purchase.price), saved: deposit } })} help="Including any part-exchange." />
           </div>
-          <p className="estimate-note small"><b>A simulation, not a prediction.</b> It only knows what you’ve told us.</p>
-          {said.map((s) => <p key={s} className="insight">{s}</p>)}
-          <section className="card stack">
-            <Chart label="Money left in a normal month, cash buffer, and cumulative borrowing cost over time" endLabels={false}
-              series={[
-                { name: "Normal month leaves", kind: "line", color: "#1f1f1f", pts: rows.slice(0, horizon).map((r) => ({ t: r.m, y: r.normalLeft })) },
-                { name: "Cash buffer", kind: "line", color: "#717173", dash: "7 5", pts: rows.slice(0, horizon).map((r) => ({ t: r.m, y: r.buffer })) },
-                { name: "Borrowing cost so far", kind: "line", color: "#a1a1a6", dash: "2 4", pts: rows.slice(0, horizon).map((r) => ({ t: r.m, y: r.cumulativeCost })) },
-              ]} tipLabel={(t) => monthName(Math.round(t))} />
-            <div className="legend"><span><i />Normal month leaves</span><span><i style={{ borderTopStyle: "dashed", borderColor: "#717173" }} />Cash buffer</span><span><i style={{ borderTopStyle: "dotted", borderColor: "#a1a1a6" }} />Borrowing cost so far</span></div>
-          </section>
-          <div className="month-cards">
-            {rows.slice(0, Math.min(horizon, 12)).map((r) => (
-              <div key={r.m} className={`month-card${r.left < 0 ? " short" : ""}${r.oneOffIn || r.oneOffOut ? " oneoff" : ""}`}>
-                <b>{monthName(r.m)}</b>
-                <span className="small">Income +{money(r.recurringIn)}</span>
-                <span className="small">Regular costs −{money(r.recurringOut)}</span>
-                <span className="small">Car −{money(r.newPayment)}</span>
-                {r.oneOffIn > 0 && <span className="small"><b>One-off +{money(r.oneOffIn)}</b></span>}
-                {r.oneOffOut > 0 && <span className="small"><b>One-off −{money(r.oneOffOut)}</b></span>}
-                <span className="month-left">{r.left < 0 ? `Short ${money(-r.left)}` : `${money(r.left)} left`}</span>
-                {r.notes.length > 0 && <span className="small muted">{r.notes.join(" · ")}</span>}
-              </div>
-            ))}
+          <div className="big-fact" aria-live="polite">
+            <span className="caption">Potential amount requiring finance <SourceBadge source="we_calculated" /></span>
+            <span className="small">{money(st.purchase.price)} car price</span>
+            <span className="small">− {money(st.purchase.deposit)} deposit</span>
+            <b>= {money(financed)}</b>
+            <span className="small">You may need to finance approximately {money(financed)}.</span>
           </div>
-          {horizon > 12 && <p className="small muted">Month cards show the first year; the chart shows all {horizon} months.</p>}
-          {nav("See the hidden cost")}
+          {nav("How might I finance it?")}
         </section>
       )}
 
-      {step === 11 && (() => {
-        const h = hiddenCost(p, st.events, chosen);
-        const hb = habit(habitAmt, habitTimes);
+      {step === S.finance && (() => {
+        const examples = exampleScenarios(st.purchase, st.credit);
+        const f = st.finance;
+        const mine = carScenario({ ...st, use: "mine" });
+        const mineSch = schedule(mine);
         return (
-          <section className="stack" style={{ gap: 20 }}>
-            <h2 className="h1">The hidden cost</h2>
-            <p className="muted">It’s more than the fees. Here’s what this commitment costs in the contract, in your month, and over time.</p>
-            <div className="grid-3">
-              <div className="card stack"><span className="caption">Contract cost</span>
+          <section className="stack" style={{ gap: 20 }} aria-labelledby="q-fin">
+            <h2 id="q-fin" className="h1">{copy.financeQuestion}</h2>
+            <p className="muted">Providers can offer different APRs, fees, repayment periods and conditions. These are example scenarios to explore, not offers, and none of them is “best”. {band.note}</p>
+            <div className="option-grid">
+              {examples.map((x) => {
+                const xs = schedule(x);
+                const on = st.use === "mine" && mine.apr === x.apr && mine.term === x.term && mine.upfrontFee === x.upfrontFee;
+                return (
+                  <div key={x.id} className={`option${on ? " on" : ""}`}>
+                    <div className="row" style={{ justifyContent: "space-between" }}><b className="h3">{x.label}</b><SourceBadge source="illustrative" /></div>
+                    <p className="small">{pct(x.apr)} APR · {x.term} months · fee {money(x.upfrontFee)}</p>
+                    <dl className="option-facts">
+                      <div><dt>Each month</dt><dd>{money(xs.regular, true)}</dd></div>
+                      <div><dt>Total repaid</dt><dd>{money(xs.total)}</dd></div>
+                      <div><dt>Borrowing cost</dt><dd>{money(xs.cost)}</dd></div>
+                    </dl>
+                    <button type="button" className={on ? "btn btn-dark btn-sm" : "btn btn-light btn-sm"} onClick={() => set({ finance: { ...f, apr: x.apr, term: x.term, fee: x.upfrontFee }, use: "mine" })}>{on ? "Exploring these terms" : "Explore these terms"}</button>
+                  </div>
+                );
+              })}
+            </div>
+            <section className="card stack">
+              <h3 className="h3">Your finance scenario <SourceBadge source="you_told_us" /></h3>
+              <div className="journey-fields">
+                <Money id="fin-amt" label="Amount financed" step={500} value={mine.amount} onChange={(amount) => set({ finance: { ...f, amount }, use: "mine" })} help={f.amount === null ? "Worked out from price minus deposit." : undefined} />
+                <div className="field"><label htmlFor="fin-apr">APR</label><div className="input"><input id="fin-apr" type="number" min={0} step={0.1} value={mine.apr} onChange={(e) => set({ finance: { ...f, apr: Math.max(0, Number(e.target.value) || 0) }, use: "mine" })} /><span>%</span></div>{f.apr === null && <p className="help">An example rate. Change it to any rate you’ve seen.</p>}</div>
+                <div className="field"><label htmlFor="fin-term">Term</label><div className="input"><select id="fin-term" value={mine.term} onChange={(e) => set({ finance: { ...f, term: Number(e.target.value) }, use: "mine" })}>{[24, 36, 48, 60, 72].map((t) => <option key={t} value={t}>{t} months</option>)}</select></div></div>
+                <Money id="fin-fee" label="Fees (one-off)" step={10} value={f.fee} onChange={(fee) => set({ finance: { ...f, fee }, use: "mine" })} />
+              </div>
+              <div className="big-fact"><span className="caption">Monthly payment <SourceBadge source="we_calculated" /></span><b>{money(mineSch.regular, true)}</b><span className="small">{money(mineSch.total)} repaid in total · {money(mineSch.cost)} borrowing cost</span></div>
+            </section>
+            <section className="card stack">
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <h3 className="h3">I already have an offer → Decode It</h3>
+                <button type="button" className="btn btn-light btn-sm" onClick={() => setDecode(!decode)} aria-expanded={decode}>{decode ? "Hide" : "Decode my offer"}</button>
+              </div>
+              <p className="small muted">Upload or paste it. AI reads the document and quotes where each term came from; our code does every calculation.</p>
+              {decode && <PasteFill idPrefix="car-offer" title="Upload or paste your offer" samples={[{ label: "Example: car finance offer", text: CAR_OFFER }]} onFill={onFill} />}
+              {st.offer && (
+                <div className="stack">
+                  <dl className="mlabel-rows">
+                    <div><dt>Amount <SourceBadge source={st.offer.scenario.fieldSources.amount ?? "document_says"} /></dt><dd>{money(st.offer.scenario.amount)}</dd></div>
+                    <div><dt>APR <SourceBadge source={st.offer.scenario.fieldSources.apr ?? "document_says"} /></dt><dd>{pct(st.offer.scenario.apr)}</dd></div>
+                    <div><dt>Term <SourceBadge source={st.offer.scenario.fieldSources.term ?? "document_says"} /></dt><dd>{st.offer.scenario.term} months</dd></div>
+                    <div><dt>Fee <SourceBadge source={st.offer.scenario.fieldSources.upfrontFee ?? "you_told_us"} /></dt><dd>{money(st.offer.scenario.upfrontFee)}</dd></div>
+                    <div className="strong"><dt>Each month <SourceBadge source="we_calculated" /></dt><dd>{money(schedule(st.offer.scenario).regular, true)}</dd></div>
+                  </dl>
+                  {st.offer.assumed.length > 0 && <p className="missing-banner small"><b>Not in the document:</b> {st.offer.assumed.join(", ")}. Your scenario’s values are used for these.</p>}
+                  <div className="segmented" role="group" aria-label="Which terms to simulate">
+                    <button type="button" aria-pressed={st.use === "offer"} onClick={() => set({ use: "offer" })}>Simulate my offer</button>
+                    <button type="button" aria-pressed={st.use === "mine"} onClick={() => set({ use: "mine" })}>Simulate my scenario</button>
+                  </div>
+                </div>
+              )}
+            </section>
+            {doc && (doc.conditions.length > 0 || doc.source) && (
+              <div className="grid-2 doc-row">
+                <CostScanner conditions={doc.conditions} onShow={show} />
+                <DocumentPanel source={doc.source} marks={marks} active={active} redactions={doc.redactions} />
+              </div>
+            )}
+            {nav("Now, my situation")}
+          </section>
+        );
+      })()}
+
+      {step >= S.income && step <= S.longterm && (
+        <div className="picture-layout">
+          <section className="stack journey-card">
+            {step === S.income && (<>
+              <p className="insight">{money(sch.regular, true)} a month doesn’t tell us much on its own. Let’s understand what it could mean in your situation.</p>
+              <h2 className="h1">What money regularly comes in?</h2>
+              <p className="muted">After tax, each month. Rough is fine, and everything stays in your browser.</p>
+              {fields("income", [["salary", "Take-home salary"], ["other", "Other recurring income", "Only money that arrives every month."]])}
+              <p className="small muted">Bonuses and other one-off money come later, so they’re never counted as regular income.</p>
+            </>)}
+            {step === S.spending && (<>
+              <h2 className="h1">What does a normal month cost you?</h2>
+              <p className="muted">The regular things. No judgement: it just makes the simulation realistic.</p>
+              {fields("essentials", [["rent", "Rent or mortgage"], ["bills", "Bills (energy, water, council tax, phone)"], ["food", "Food"], ["transport", "Transport"], ["insurance", "Insurance"]])}
+              {fields("discretionary", [["subs", "Subscriptions"], ["fun", "Shopping, eating out and entertainment"], ["otherSpend", "Other recurring spending"]])}
+            </>)}
+            {step === S.borrowing && (<>
+              <h2 className="h1">What are you already paying back?</h2>
+              <p className="muted">Monthly repayments on borrowing you already have.</p>
+              {fields("debts", [["loan", "Existing loans"], ["card", "Credit-card repayments"], ["carfin", "Existing car finance"], ["bnpl", "Buy Now Pay Later"], ["overdraft", "Overdraft or other borrowing"]])}
+              {loan && loan.amount > 0 && (
+                <div className="field" style={{ maxWidth: 360 }}>
+                  <label htmlFor="loan-end">When is your loan’s last payment?</label>
+                  <div className="input"><select id="loan-end" value={loan.endsIn ?? 0} onChange={(e) => setPicture({ debts: p.debts.map((d) => (d.id === "loan" ? { ...d, endsIn: Number(e.target.value) || undefined } : d)) })}><option value={0}>Not soon / not sure</option>{Array.from({ length: 60 }, (_, k) => k + 1).map((m) => <option key={m} value={m}>{m === 1 ? `This month (${monthName(0)})` : monthName(m - 1)}</option>)}</select></div>
+                </div>
+              )}
+            </>)}
+            {step === S.buffer && (<>
+              <h2 className="h1">What do you have to fall back on?</h2>
+              <p className="muted">Cash you could use if a month goes wrong. Keep the car deposit out of this.</p>
+              <div className="journey-fields">
+                <Money id="r-sav" label="Savings" step={100} value={p.reserves.savings} onChange={(savings) => setPicture({ reserves: { ...p.reserves, savings } })} />
+                <Money id="r-em" label="Emergency cash" step={100} value={p.reserves.emergency} onChange={(emergency) => setPicture({ reserves: { ...p.reserves, emergency } })} />
+              </div>
+            </>)}
+            {step === S.longterm && (<>
+              <h2 className="h1">Anything you put aside regularly?</h2>
+              <p className="muted">Pension and regular saving matter too. We don’t try to predict retirement outcomes.</p>
+              <div className="journey-fields">
+                <Money id="r-pen" label="Your pension contribution a month" value={p.pension.amount} onChange={(amount) => setPicture({ pension: { ...p.pension, amount } })} />
+                <Money id="r-emp" label="Employer pension contribution a month" value={p.pension.employer ?? 0} onChange={(employer) => setPicture({ pension: { ...p.pension, employer } })} help="For information only: it isn’t paid from your month." />
+              </div>
+              <label className="quiz-option"><input type="checkbox" checked={p.pension.alreadyDeducted} onChange={(e) => setPicture({ pension: { ...p.pension, alreadyDeducted: e.target.checked } })} /> My pension is already taken out before my take-home pay</label>
+              <p className="small muted">Workplace pensions usually are. If so, we don’t count it twice.</p>
+              {fields("otherSaving", [["regular", "Regular savings or investments a month"], ["otherCommit", "Other regular commitments", "e.g. childcare or support payments."]])}
+            </>)}
+            {nav(step === S.longterm ? "What about my future?" : "Next")}
+          </section>
+          {situationCard()}
+        </div>
+      )}
+
+      {step === S.future && (
+        <section className="stack journey-card" aria-labelledby="q-future">
+          <h2 id="q-future" className="h1">What do you know about your future that your financial history doesn’t?</h2>
+          <p className="muted">Your bank sees your past transactions. Only you know what’s coming: a bonus, a pay rise, a loan ending, a rent rise.</p>
+          <EventEditor events={st.events} onChange={(events) => set({ events })} monthName={monthName}
+            onAdd={(t) => {
+              if (t.label !== "Existing loan ending" || !loan || loan.amount <= 0) return false;
+              setPicture({ debts: p.debts.map((d) => (d.id === "loan" ? { ...d, endsIn: d.endsIn ?? 5 } : d)) });
+              return true;
+            }} />
+          {loan && loan.amount > 0 && loan.endsIn && (
+            <div className="event-line list">
+              <b className="event-amt">−{money(loan.amount)} a month</b><span className="event-tag">RECURRING EXPENSE STOPS</span>
+              <span className="small muted">Your existing loan’s last payment is in {monthName(loan.endsIn - 1)}. <button type="button" className="link small" onClick={() => go(S.borrowing)}>Change</button></span>
+            </div>
+          )}
+          <p className="small"><b>Your regular income stays {money(income)} a month.</b> One-off money appears only in its own month and is never added to your regular income.</p>
+          {nav("Show me how my situation could change")}
+        </section>
+      )}
+
+      {step === S.impact && (() => {
+        const h = hiddenCost(p, st.events, sc);
+        return (
+          <section className="stack" style={{ gap: 20 }} aria-labelledby="q-impact">
+            <h2 id="q-impact" className="h1">What this car finance could mean for your situation</h2>
+            <div className="view-switch row">
+              <div className="segmented" role="group" aria-label="How much detail">
+                <button type="button" aria-pressed={!full} onClick={() => setFull(false)}>Quick view</button>
+                <button type="button" aria-pressed={full} onClick={() => setFull(true)}>Full breakdown</button>
+              </div>
+              <span className="small muted">Same numbers either way.</span>
+            </div>
+            <div className="grid-2">
+              <div className="card stack">
+                <span className="caption">Your normal situation <SourceBadge source="you_told_us" /></span>
                 <dl className="mlabel-rows">
-                  <div><dt>Interest</dt><dd>{money(h.contract.interest)}</dd></div>
-                  <div><dt>Fees</dt><dd>{money(h.contract.fees)}</dd></div>
-                  <div><dt>Late payment fee</dt><dd>{h.contract.lateFee ? money(h.contract.lateFee) : "Not stated"}</dd></div>
-                  <div className="strong"><dt>Total borrowing cost</dt><dd>{money(h.contract.totalCost)}</dd></div>
-                  <div><dt>APR</dt><dd>{pct(h.contract.apr)}</dd></div>
+                  <div><dt>Recurring income</dt><dd>{money(income)}</dd></div>
+                  <div><dt>− Living costs</dt><dd>{money(spending)}</dd></div>
+                  <div><dt>− Existing borrowing</dt><dd>{money(borrowing)}</dd></div>
+                  <div><dt>− Pension and regular savings</dt><dd>{money(longTerm)}</dd></div>
+                  <div className="strong"><dt>= Estimated normal monthly remaining</dt><dd>{money(pos.value)}</dd></div>
                 </dl>
               </div>
-              <div className="card stack"><span className="caption">Cash-flow cost</span>
+              <div className="card stack emph-card">
+                <span className="caption">With this car finance <SourceBadge source="we_calculated" /></span>
                 <dl className="mlabel-rows">
-                  <div><dt>Less each month</dt><dd>{money(h.cashflow.monthlyReduction, true)}</dd></div>
-                  <div><dt>Of take-home pay</dt><dd>{pct(h.cashflow.pctOfIncome)}</dd></div>
-                  <div className="strong"><dt>Buffer after 12 months</dt><dd>{money(h.cashflow.bufferAfter12)}</dd></div>
-                  <div><dt>…without the car</dt><dd>{money(h.cashflow.bufferAfter12Without)}</dd></div>
-                </dl>
-              </div>
-              <div className="card stack"><span className="caption">Cumulative impact</span>
-                <dl className="mlabel-rows">
-                  <div><dt>Committed in 12 months</dt><dd>{money(h.cumulative.at12)}</dd></div>
-                  <div><dt>In 24 months</dt><dd>{money(h.cumulative.at24)}</dd></div>
-                  <div className="strong"><dt>Over the full term</dt><dd>{money(h.cumulative.atTerm)}</dd></div>
-                  <div><dt>Plus existing repayments, 12 months</dt><dd>{money(h.cumulative.existingAt12)}</dd></div>
+                  <div><dt>Normal monthly remaining</dt><dd>{money(pos.value)}</dd></div>
+                  <div><dt>− Proposed car payment <SourceBadge source={docSource} /></dt><dd>{money(imp.payment, true)}</dd></div>
+                  <div className="strong"><dt>= Estimated position after the new commitment</dt><dd>{money(imp.after)}</dd></div>
+                  <div><dt>Difference each month</dt><dd>−{money(imp.payment, true)}</dd></div>
                 </dl>
               </div>
             </div>
-            <section className="card stack">
-              <h3 className="h3">How small repeated spending adds up</h3>
-              <div className="journey-fields" style={{ maxWidth: 520 }}>
-                <Money id="hb-a" label="Each time" value={habitAmt} onChange={setHabitAmt} step={1} />
-                <div className="field"><label htmlFor="hb-t">Times a week</label><div className="input"><input id="hb-t" type="number" min={0} max={21} value={habitTimes} onChange={(e) => setHabitTimes(Number(e.target.value) || 0)} /></div></div>
+            <p className="insight">Under the information you’ve entered, this scenario would make your regular monthly outgoings approximately {money(imp.payment)} higher.</p>
+            <div className="tiles">
+              <div className="tile"><span className="caption">Payment as share of take-home pay</span><span className="v">{pct(imp.pctOfIncome)}</span><span className="small muted">of {money(income)}</span></div>
+              <div className="tile"><span className="caption">Total recurring commitments</span><span className="v">{money(spending + borrowing + longTerm + imp.payment)}</span><span className="small muted">a month, including the car</span></div>
+              <div className="tile"><span className="caption">Total borrowing cost</span><span className="v">{money(sch.cost)}</span><span className="small muted">interest and fees</span></div>
+              <div className="tile"><span className="caption">Cash buffer in 12 months</span><span className="v">{money(rows[11].buffer)}</span><span className="small muted">vs {money(without[11].buffer)} without the car (from {money(bufferStart)} now)</span></div>
+            </div>
+            {st.events.length > 0 && (
+              <div className="list stack">
+                <span className="caption">Kept separate from your normal month</span>
+                {st.events.map((e) => <p key={e.id} className="small event-line"><b className="event-amt">{eventAmount(e)}</b><span className="event-tag">{eventTag(e)}</span><span className="muted">{eventLine(e, monthName)}</span></p>)}
               </div>
-              <p className="lead">{money(habitAmt, true)} × {habitTimes} a week → about <b>{money(hb.week, true)}</b> a week → <b>{money(hb.month)}</b> a month → <b>{money(hb.year)}</b> a year.</p>
-              <p className="small muted">Alongside the car payment, that’s {imp.after > 0 ? `${Math.round((hb.month / imp.after) * 100)}% of what a normal month would leave` : "on top of a month that’s already short"}. Just the arithmetic, not a judgement.</p>
+            )}
+            {full && (<>
+              <WhyBreakdown title="Every line behind the position after the car payment." result={imp.before}
+                extra={[{ label: "Car payment", amount: -imp.payment, source: sc.source === "document" ? "document_says" : "we_calculated" }]}
+                note={oneOffIns.length ? `${oneOffIns.map((o) => o.label).join(", ")} ${oneOffIns.length > 1 ? "are" : "is"} one-off, so ${oneOffIns.length > 1 ? "they’re" : "it’s"} not included in regular monthly income.` : undefined} />
+              <div className="grid-3">
+                <div className="card stack"><span className="caption">Contract cost</span>
+                  <dl className="mlabel-rows">
+                    <div><dt>Interest</dt><dd>{money(h.contract.interest)}</dd></div>
+                    <div><dt>Fees</dt><dd>{money(h.contract.fees)}</dd></div>
+                    <div><dt>Late payment fee</dt><dd>{h.contract.lateFee ? money(h.contract.lateFee) : "Not stated"}</dd></div>
+                    <div className="strong"><dt>Total borrowing cost</dt><dd>{money(h.contract.totalCost)}</dd></div>
+                  </dl>
+                </div>
+                <div className="card stack"><span className="caption">Cash-flow cost</span>
+                  <dl className="mlabel-rows">
+                    <div><dt>Less each month</dt><dd>{money(h.cashflow.monthlyReduction, true)}</dd></div>
+                    <div className="strong"><dt>Buffer after 12 months</dt><dd>{money(h.cashflow.bufferAfter12)}</dd></div>
+                    <div><dt>…without the car</dt><dd>{money(h.cashflow.bufferAfter12Without)}</dd></div>
+                  </dl>
+                </div>
+                <div className="card stack"><span className="caption">Cumulative</span>
+                  <dl className="mlabel-rows">
+                    <div><dt>Paid in 12 months</dt><dd>{money(h.cumulative.at12)}</dd></div>
+                    <div><dt>In 24 months</dt><dd>{money(h.cumulative.at24)}</dd></div>
+                    <div className="strong"><dt>Over the full term</dt><dd>{money(h.cumulative.atTerm)}</dd></div>
+                  </dl>
+                </div>
+              </div>
+            </>)}
+            {nav("See how it could change over time")}
+          </section>
+        );
+      })()}
+
+      {step === S.timeline && (() => {
+        const said = statements(rows.slice(0, horizon), bufferStart, monthName);
+        const saving = sumList(p.otherSaving) + (p.pension.alreadyDeducted ? 0 : p.pension.amount);
+        return (
+          <section className="stack" style={{ gap: 20 }} aria-labelledby="q-time">
+            <h2 id="q-time" className="h1">See how your situation could change over time</h2>
+            <div className="segmented" role="group" aria-label="How far ahead">
+              {[3, 6, 12, 24].map((hz) => <button key={hz} type="button" aria-pressed={horizon === hz} onClick={() => setHorizon(hz)}>{hz} months</button>)}
+            </div>
+            <p className="estimate-note small"><b>A simulation based on the assumptions you’ve entered, not a prediction.</b></p>
+            {said.map((s) => <p key={s} className="insight">{s}</p>)}
+            <section className="card stack">
+              <Chart label="Money left each month and cash buffer over time" endLabels={false}
+                series={[
+                  { name: "Left each month", kind: "line", color: "#1f1f1f", pts: rows.slice(0, horizon).map((r) => ({ t: r.m, y: r.left })) },
+                  { name: "Cash buffer", kind: "line", color: "#717173", dash: "7 5", pts: rows.slice(0, horizon).map((r) => ({ t: r.m, y: r.buffer })) },
+                ]} tipLabel={(t) => monthName(Math.round(t))} />
+              <div className="legend"><span><i />Left each month</span><span><i style={{ borderTopStyle: "dashed", borderColor: "#717173" }} />Cash buffer</span></div>
             </section>
+            <div className="month-cards">
+              {rows.slice(0, horizon).map((r) => (
+                <div key={r.m} className={`month-card${r.left < 0 ? " short" : ""}${r.oneOffs.length ? " oneoff" : ""}`}>
+                  <b>{monthName(r.m)}</b>
+                  <span className="small">Salary and regular income +{money(r.recurringIn)}</span>
+                  <span className="small">Normal spending −{money(r.recurringOut - r.existingDebt - saving)}</span>
+                  {r.existingDebt > 0 && <span className="small">Existing borrowing −{money(r.existingDebt)}</span>}
+                  {saving > 0 && <span className="small">Pension and savings −{money(saving)}</span>}
+                  <span className="small">Car −{money(r.newPayment)}</span>
+                  {r.oneOffs.map((o) => <span key={o.label} className="small"><b>{o.label} {o.amount >= 0 ? "+" : "−"}{money(Math.abs(o.amount))}</b> <span className="event-tag">ONE-OFF</span></span>)}
+                  <span className="month-left">{r.left < 0 ? `Short ${money(-r.left)}` : `${money(r.left)} left`}</span>
+                  {r.notes.filter((n) => !n.includes("(one-off)")).map((n) => <span key={n} className="small muted">{n}</span>)}
+                </div>
+              ))}
+            </div>
             {nav("Try what-ifs")}
           </section>
         );
       })()}
 
-      {step === 12 && (() => {
-        const base = { picture: p, events: st.events, scenario: chosen };
-        const alt = applyLevers(base, levers);
+      {step === S.whatif && (() => {
+        const base = { picture: p, events: st.events, scenario: sc };
+        const alt = applyLevers(base, levers, amounts);
         const H = Math.max(24, Math.min(84, alt.scenario.startIn + alt.scenario.term));
-        const baseRows = simulateMonths(p, st.events, chosen, H);
+        const baseRows = simulateMonths(p, st.events, sc, H);
         const altRows = simulateMonths(alt.picture, alt.events, alt.scenario, H);
-        const bs = schedule(chosen), as = schedule(alt.scenario);
+        const bs = schedule(sc), as = schedule(alt.scenario);
         const typical = (rs: typeof baseRows, from: number) => { const v = rs.slice(from, from + 12).map((r) => r.normalLeft).sort((a, b) => a - b); return v[Math.floor(v.length / 2)] ?? 0; };
         const row = (label: string, a: string, b: string) => <tr key={label} className={a !== b ? "priority" : undefined}><th scope="row">{label}</th><td>{a}</td><td>{b}</td></tr>;
         const altSaid = statements(altRows.slice(0, 24), bufferStart, monthName);
+        const extraDeposit = sc.amount - alt.scenario.amount;
+        const toggle = (l: Lever) => setLevers((x) => (x.includes(l) ? x.filter((y) => y !== l) : [...x, l]));
+        const shown = (Object.keys(LEVERS) as Lever[]).filter((l) => !(l === "waitBonus" && !oneOffIns.length) && !(l === "loanEnds" && borrowing <= 0));
         return (
-          <section className="stack" style={{ gap: 20 }}>
-            <h2 className="h1">What if…?</h2>
-            <p className="muted">Turn on any combination. Our code recalculates everything; nothing here is a prediction or advice.</p>
+          <section className="stack" style={{ gap: 20 }} aria-labelledby="q-whatif">
+            <h2 id="q-whatif" className="h1">What if…?</h2>
+            <p className="muted">Pick any combination. You choose each scenario; our code reruns the whole simulation. Nothing here is a prediction or advice.</p>
             <div className="chips" role="group" aria-label="What ifs">
-              {(Object.keys(LEVERS) as Lever[]).filter((l) => !(l === "waitBonus" && !oneOffs.length) && !(l === "loanEnds" && !p.debts.length)).map((l) => (
-                <button key={l} type="button" className="chip" aria-pressed={levers.includes(l)} onClick={() => setLevers((x) => (x.includes(l) ? x.filter((y) => y !== l) : [...x, l]))}>{LEVERS[l]}</button>
+              {shown.map((l) => (
+                <button key={l} type="button" className="chip" aria-pressed={levers.includes(l)} onClick={() => toggle(l)}>
+                  {l === "rentUp" ? `Rent increases by ${money(amounts.rent)}` : l === "salaryUp" ? `My salary changes by ${amounts.salary >= 0 ? "+" : "−"}${money(Math.abs(amounts.salary))}` : LEVERS[l]}
+                </button>
               ))}
             </div>
+            {(levers.includes("rentUp") || levers.includes("salaryUp")) && (
+              <div className="journey-fields" style={{ maxWidth: 560 }}>
+                {levers.includes("rentUp") && <Money id="w-rent" label="Rent increase a month" value={amounts.rent} onChange={(rent) => setAmounts({ ...amounts, rent })} />}
+                {levers.includes("salaryUp") && <div className="field"><label htmlFor="w-sal">Salary change a month (negative for a cut)</label><div className="input"><span>£</span><input id="w-sal" type="number" step={50} value={amounts.salary} onChange={(e) => setAmounts({ ...amounts, salary: Number(e.target.value) || 0 })} /></div></div>}
+              </div>
+            )}
+            {extraDeposit > 0 && (
+              <div className="grid-2">
+                <div className="card stack"><span className="caption">Original</span><p className="small">{money(st.purchase.price)} car</p><p className="small">{money(st.purchase.deposit)} deposit</p><p className="h3">{money(sc.amount)} finance</p></div>
+                <div className="card stack emph-card"><span className="caption">What-if</span><p className="small">{money(st.purchase.price)} car</p><p className="small">{money(st.purchase.deposit + extraDeposit)} deposit</p><p className="h3">{money(alt.scenario.amount)} finance</p>{alt.scenario.startIn > 0 && <p className="small">First payment in {monthName(alt.scenario.startIn + 1)}, after waiting for the bonus.</p>}</div>
+              </div>
+            )}
             <div className="table-wrap">
               <table className="cmp">
-                <thead><tr><th scope="col"></th><th scope="col">As explored</th><th scope="col">With your what-ifs</th></tr></thead>
+                <thead><tr><th scope="col"></th><th scope="col">As entered</th><th scope="col">With your what-ifs</th></tr></thead>
                 <tbody>
-                  {row("Borrowing", money(chosen.amount), money(alt.scenario.amount))}
-                  {row("APR and term", `${pct(chosen.apr)} · ${chosen.term}m`, `${pct(alt.scenario.apr)} · ${alt.scenario.term}m${alt.scenario.startIn ? `, from ${monthName(alt.scenario.startIn + 1)}` : ""}`)}
+                  {row("Finance", money(sc.amount), money(alt.scenario.amount))}
+                  {row("APR and term", `${pct(sc.apr)} · ${sc.term}m`, `${pct(alt.scenario.apr)} · ${alt.scenario.term}m`)}
                   {row("Each month", money(bs.regular, true), money(as.regular, true))}
                   {row("Total repaid", money(bs.total), money(as.total))}
                   {row("Borrowing cost", money(bs.cost), money(as.cost))}
-                  {row("A normal month leaves", money(typical(baseRows, chosen.startIn)), money(typical(altRows, alt.scenario.startIn)))}
+                  {row("A normal month leaves", money(typical(baseRows, sc.startIn)), money(typical(altRows, alt.scenario.startIn)))}
                   {row("Buffer after 12 months", money(baseRows[11].buffer), money(altRows[11].buffer))}
                   {row("Months short (first 24)", String(baseRows.slice(0, 24).filter((r) => r.left < 0).length), String(altRows.slice(0, 24).filter((r) => r.left < 0).length))}
                 </tbody>
               </table>
             </div>
             {levers.length > 0 && altSaid.map((s) => <p key={s} className="insight small">{s}</p>)}
-            {nav("Decode your actual offer")}
+            {nav("Before you sign")}
           </section>
         );
       })()}
 
-      {step === 13 && (
-        <section className="stack" style={{ gap: 20 }}>
-          <h2 className="h1">Got a real offer? Decode it into your simulation</h2>
-          <p className="muted">Upload or paste the finance offer. AI reads it; our code puts its terms into everything you’ve just seen. Values not in the document are filled from your example and clearly labelled.</p>
-          <div className="grid-2 doc-row">
-            <PasteFill idPrefix="car-offer" title="Upload or paste your offer" samples={[{ label: "Example: car finance offer", text: CAR_OFFER }]} onFill={onFill} />
-            {st.offer ? (
-              <section className="card stack">
-                <div className="row" style={{ justifyContent: "space-between" }}><h3 className="h3">Your actual offer</h3><SourceBadge source="document_says" /></div>
-                <dl className="mlabel-rows">
-                  <div><dt>Amount <SourceBadge source={st.offer.scenario.fieldSources.amount ?? "document_says"} /></dt><dd>{money(st.offer.scenario.amount)}</dd></div>
-                  <div><dt>APR <SourceBadge source={st.offer.scenario.fieldSources.apr ?? "document_says"} /></dt><dd>{pct(st.offer.scenario.apr)}</dd></div>
-                  <div><dt>Term <SourceBadge source={st.offer.scenario.fieldSources.term ?? "document_says"} /></dt><dd>{st.offer.scenario.term} months</dd></div>
-                  <div><dt>Fee <SourceBadge source={st.offer.scenario.fieldSources.upfrontFee ?? "illustrative"} /></dt><dd>{money(st.offer.scenario.upfrontFee)}</dd></div>
-                  <div className="strong"><dt>Each month <SourceBadge source="we_calculated" /></dt><dd>{money(schedule(st.offer.scenario).regular, true)}</dd></div>
-                </dl>
-                {st.offer.assumed.length > 0 && <p className="missing-banner small"><b>Not in the document:</b> {st.offer.assumed.join(", ")}. Example values are used, so the results are estimates.</p>}
-                <div className="row">
-                  <button type="button" className={st.chosen === "offer" ? "btn btn-dark btn-sm" : "btn btn-light btn-sm"} onClick={() => set({ chosen: "offer" })}>{st.chosen === "offer" ? "Your simulation uses this offer" : "Use this offer in my simulation"}</button>
-                  <button type="button" className="link small" onClick={() => go(9)}>See it in my month</button>
-                </div>
-              </section>
-            ) : <p className="list small">No offer decoded yet. Try the example car finance offer to see how it works.</p>}
-          </div>
-          {doc && (doc.conditions.length > 0 || doc.source) && (
-            <div className="grid-2 doc-row">
-              <CostScanner conditions={doc.conditions} onShow={show} />
-              <DocumentPanel source={doc.source} marks={marks} active={active} redactions={doc.redactions} />
-            </div>
-          )}
-          {nav("Before you sign")}
-        </section>
-      )}
-
-      {step === 14 && (
-        <section className="stack" style={{ gap: 20 }}>
-          <h2 className="h1">Before you sign: the full picture</h2>
+      {step === S.summary && (
+        <section className="stack" style={{ gap: 20 }} aria-labelledby="q-sum">
+          <h2 id="q-sum" className="h1">Before you sign</h2>
           <div className="summary-grid">
-            <div className="card stack"><span className="caption">The decision you’re exploring</span><p className="h3">A {money(st.purchase.price)} car</p><p className="small">{money(st.purchase.deposit)} deposit <SourceBadge source="you_told_us" /></p></div>
-            <div className="card stack"><span className="caption">Potential financing</span><p className="h3">{money(chosen.amount)} financed</p><p className="small">{chosen.term} months · {pct(chosen.apr)} APR <SourceBadge source={chosen.source === "document" ? "document_says" : "illustrative"} /></p></div>
-            <div className="card stack"><span className="caption">Cost <SourceBadge source="we_calculated" /></span><p className="h3">{money(sch.regular, true)} a month</p><p className="small">{money(sch.total)} total repayment · {money(sch.cost)} borrowing cost</p></div>
-            <div className="card stack"><span className="caption">Your financial picture <SourceBadge source="you_told_us" /></span><p className="small">{money(income)} regular income · {money(imp.existingDebt)} existing repayments</p><p className="h3">{money(imp.after)} left in a normal month after the car</p></div>
-            <div className="card stack"><span className="caption">Looking ahead <SourceBadge source="you_told_us" /></span>
-              {st.events.length ? <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>{st.events.map((e) => <li key={e.id}>{e.label}: {money(e.amount)}, {monthName(e.month)} ({e.recurrence === "one_off" ? "one-off" : e.recurrence === "recurring_from" ? "every month from then" : "stops from then"})</li>)}</ul> : <p className="small muted">Nothing added.</p>}
+            <div className="card stack"><span className="caption">The car <SourceBadge source="you_told_us" /></span>
+              <dl className="mlabel-rows"><div><dt>Price</dt><dd>{money(st.purchase.price)}</dd></div><div><dt>Deposit</dt><dd>{money(st.purchase.deposit)}</dd></div><div className="strong"><dt>Financed</dt><dd>{money(sc.amount)}</dd></div></dl>
             </div>
-            <div className="card stack"><span className="caption">Your actual offer</span>
-              {st.offer ? (<>
-                <p className="small">{doc?.conditions.length ? `${doc.conditions.length} conditions found, including: ${doc.conditions.slice(0, 3).map((c) => c.title).join(", ")}.` : "Decoded."} <SourceBadge source="document_says" /></p>
-                {st.offer.assumed.length > 0 && <p className="small">Not stated in the document: {st.offer.assumed.join(", ")}.</p>}
-              </>) : <p className="small muted">Not decoded yet. <button type="button" className="link small" onClick={() => go(13)}>Decode an offer</button></p>}
+            <div className="card stack"><span className="caption">The finance <SourceBadge source={sc.source === "document" ? "document_says" : sc.fieldSources.apr === "illustrative" ? "illustrative" : "you_told_us"} /></span>
+              <dl className="mlabel-rows"><div><dt>APR</dt><dd>{pct(sc.apr)}</dd></div><div><dt>Term</dt><dd>{sc.term} months</dd></div><div><dt>Monthly</dt><dd>{money(sch.regular, true)}</dd></div><div><dt>Total repaid</dt><dd>{money(sch.total)}</dd></div><div className="strong"><dt>Borrowing cost</dt><dd>{money(sch.cost)}</dd></div></dl>
+            </div>
+            <div className="card stack"><span className="caption">Your situation <SourceBadge source="you_told_us" /></span>
+              <dl className="mlabel-rows"><div><dt>Recurring income</dt><dd>{money(income)}</dd></div><div><dt>Normal commitments</dt><dd>{money(spending + longTerm)}</dd></div><div><dt>Existing borrowing</dt><dd>{money(borrowing)}</dd></div><div><dt>Remaining before the car</dt><dd>{money(pos.value)}</dd></div><div className="strong"><dt>Remaining after the car</dt><dd>{money(imp.after)}</dd></div></dl>
+            </div>
+            <div className="card stack"><span className="caption">Coming up <SourceBadge source="you_told_us" /></span>
+              {st.events.length || loan?.endsIn ? (
+                <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
+                  {st.events.map((e) => <li key={e.id}>{eventLine(e, monthName)}</li>)}
+                  {loan && loan.amount > 0 && loan.endsIn && <li>Existing loan ({money(loan.amount)} a month) has its last payment in {monthName(loan.endsIn - 1)}</li>}
+                </ul>
+              ) : <p className="small muted">Nothing added.</p>}
+            </div>
+            <div className="card stack"><span className="caption">Important terms <SourceBadge source="document_says" /></span>
+              {st.offer?.terms?.length ? (
+                <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6 }}>
+                  {st.offer.terms.map((t) => <li key={t.title}><b>{t.title}</b>{t.quote && <span className="muted"> · “{t.quote}”</span>}</li>)}
+                </ul>
+              ) : <p className="small muted">No offer decoded yet. <button type="button" className="link small" onClick={() => { setDecode(true); go(S.finance); }}>Decode It</button></p>}
             </div>
           </div>
           {statements(rows.slice(0, 24), bufferStart, monthName).map((s) => <p key={s} className="insight small">{s}</p>)}
           <CommitCheck type="loan" m={loanM} risks={risks("loan", loanValues, loanM)} check={understandingCheck("loan", loanValues, loanM)} perLabel="a month" onSave={() => {
-            if (saved.length < MAX_SAVED) savedStore.set([...saved, { id: newOptionId(), name: `Car: ${chosen.label}`, type: "loan", values: loanValues }]);
+            if (saved.length < MAX_SAVED) savedStore.set([...saved, { id: newOptionId(), name: `Car: ${sc.label}`, type: "loan", values: loanValues }]);
           }} />
-          <p className="lead closing">We’ve shown how the numbers change under the information and assumptions you’ve provided. The decision remains yours.</p>
           <div className="done-grid">
-            <button type="button" className="done-card" onClick={() => { if (saved.length >= MAX_SAVED) { setMsg(`Compare holds up to ${MAX_SAVED}.`); return; } savedStore.set([...saved, { id: newOptionId(), name: `Car: ${chosen.label}`, type: "loan", values: loanValues }]); setMsg("Added to Compare."); }}><Icon name="compare" /><b>Add to Compare</b><span className="small muted">Line it up with other options</span></button>
-            <button type="button" className="done-card" onClick={() => { commitmentsStore.set([...commitments, { id: newOptionId(), name: `Car (${chosen.label})`, type: "loan", values: loanValues }]); setMsg("Added to your commitment map."); }}><Icon name="chart" /><b>Add to my commitments</b><span className="small muted">See it next to what you already pay</span></button>
-            <Link href="/" className="done-card"><Icon name="spark" /><b>Explore something else</b><span className="small muted">Back to the start</span></Link>
+            <button type="button" className="done-card" onClick={() => { if (saved.length >= MAX_SAVED) { setMsg(`Compare holds up to ${MAX_SAVED}.`); return; } savedStore.set([...saved, { id: newOptionId(), name: `Car: ${sc.label}`, type: "loan", values: loanValues }]); setMsg("Added to Compare."); }}><Icon name="compare" /><b>Add to Compare</b><span className="small muted">Line it up with other options</span></button>
+            <button type="button" className="done-card" onClick={() => { commitmentsStore.set([...commitments, { id: newOptionId(), name: `Car (${sc.label})`, type: "loan", values: loanValues }]); setMsg("Added to your commitment map."); }}><Icon name="chart" /><b>Add to my commitments</b><span className="small muted">See it next to what you already pay</span></button>
+            <Link href="/cost-checker?type=loan" className="done-card"><Icon name="calc" /><b>Open the cost checker</b><span className="small muted">Stress test, reverse calculator and more</span></Link>
           </div>
           {msg && <p className="small" role="status">{msg}</p>}
-          <button type="button" className="link small" onClick={() => { carStore.set(DEFAULT_CAR); setDoc(null); setLevers([]); go(0); }}>Clear my answers and start again</button>
+          <button type="button" className="link small" onClick={() => { carStore.set(EMPTY_CAR); setDoc(null); setLevers([]); setKnowScore(false); go(0); }}>Clear my answers and start again</button>
           {nav()}
+          <p className="lead closing">We’ve shown how the numbers change under the information and assumptions you’ve provided. The decision remains yours.</p>
         </section>
       )}
     </div>

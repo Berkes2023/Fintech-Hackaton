@@ -93,7 +93,7 @@ export function HeroCard({ fixed, minOnly }: Props) {
         <p>It takes {Math.round(minOnly.months / 12)} years and costs {money(minOnly.interest - fixed.interest)} more in interest than paying £50 a month.</p>
       </div>
 
-      <Link href="/check?type=card" className="btn btn-dark hero-card-row" style={{ width: "100%" }}>
+      <Link href="/cost-checker?type=card" className="btn btn-dark hero-card-row" style={{ width: "100%" }}>
         Try it with your own numbers <Icon name="arrow" size={18} />
       </Link>
     </div>

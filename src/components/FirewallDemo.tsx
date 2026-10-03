@@ -24,7 +24,7 @@ export function FirewallDemo() {
 
   const understand = () => {
     draftStore.set({ type: "loan", values: { amount: Math.round(credit.principal), apr: OFFER.apr, term: OFFER.months, fee: 0, lateFee: OFFER.lateFee }, example: false });
-    router.push("/check?type=loan");
+    router.push("/cost-checker?type=loan");
   };
 
   return (

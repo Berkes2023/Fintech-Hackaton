@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { simulate } from "./finance";
 import {
-  applyLevers, BANNED, exampleBand, exampleScenarios, habit, hiddenCost, impact, position, recurringIncome, schedule,
+  applyLevers, BANNED, blankPicture, carScenario, EMPTY_CAR, eventLine, eventTag, exampleBand, exampleCar, exampleScenarios, habit, hiddenCost, impact, position, recurringIncome, schedule,
   simulateMonths, statements, toMonthly, type FutureEvent, type Picture, type Scenario,
 } from "./sim";
 
@@ -141,5 +141,55 @@ describe("careful wording", () => {
     expect(said.join(" ")).toMatch(/Under the assumptions you’ve entered/);
     expect(said.join(" ")).toMatch(/would reach about £0 around month/);
     for (const s of said) expect(s).not.toMatch(BANNED);
+  });
+});
+
+describe("the /check car journey", () => {
+  const user = () => {
+    const st = exampleCar();
+    return { ...st, events: [{ id: "b", label: "Bonus", amount: 3000, month: 1, direction: "in" as const, recurrence: "one_off" as const }] };
+  };
+
+  it("starts empty, with every fixed question at zero", () => {
+    expect(EMPTY_CAR.purchase.price).toBe(0);
+    expect(position(EMPTY_CAR.picture).value).toBe(0);
+    expect(blankPicture().debts.map((d) => d.id)).toEqual(["loan", "card", "carfin", "bnpl", "overdraft"]);
+  });
+
+  it("finances price minus deposit, at the example rate for the profile until the person changes it", () => {
+    const sc = carScenario(user());
+    expect(sc.amount).toBe(20000);
+    expect(sc.apr).toBe(8.9);
+    expect(carScenario({ ...user(), finance: { amount: null, apr: 12, term: 60, fee: 0 } }).apr).toBe(12);
+  });
+
+  it("shows a £3,000 bonus as one-off income, in one month only", () => {
+    const st = user();
+    expect(eventLine(st.events[0], () => "x")).toBe("£3,000 bonus next month — ONE-OFF INCOME");
+    expect(eventTag(st.events[0])).toBe("ONE-OFF INCOME");
+    const rows = simulateMonths(st.picture, st.events, carScenario(st), 3);
+    expect(rows[0].oneOffs).toEqual([{ label: "Bonus", amount: 3000 }]);
+    expect(rows[1].oneOffs).toEqual([]);
+    expect(rows[0].recurringIn).toBe(rows[1].recurringIn);
+  });
+
+  it("waiting for the bonus moves it into the deposit only when chosen: £20,000 → £17,000", () => {
+    const st = user();
+    const base = { picture: st.picture, events: st.events, scenario: carScenario(st) };
+    expect(applyLevers(base, []).scenario.amount).toBe(20000);
+    const w = applyLevers(base, ["waitBonus"]);
+    expect(w.scenario.amount).toBe(17000);
+    expect(w.events.some((e) => e.label === "Bonus")).toBe(false);
+  });
+
+  it("'APR becomes 12%' and the adjustable rent and salary what-ifs rerun the simulation", () => {
+    const st = user();
+    const base = { picture: st.picture, events: st.events, scenario: carScenario(st) };
+    expect(applyLevers(base, ["apr12"]).scenario.apr).toBe(12);
+    const r = applyLevers(base, ["rentUp", "salaryUp"], { rent: 200, salary: -300 });
+    const rows = simulateMonths(r.picture, r.events, r.scenario, 1);
+    const plain = simulateMonths(st.picture, st.events, base.scenario, 1);
+    expect(rows[0].normalLeft).toBeCloseTo(plain[0].normalLeft - 500, 2);
+    expect(applyLevers(base, ["loanEnds"]).picture.debts.find((d) => d.id === "loan")).toBeUndefined();
   });
 });

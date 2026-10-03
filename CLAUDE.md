@@ -31,7 +31,7 @@ Users enter a commitment-based product (loan, credit card, overdraft, BNPL, subs
 - `src/lib/api.ts` + `src/app/api/v1/label`: public, AI-free Money Label API (documented at `/developers`).
 - `src/lib/dna.ts`: Product DNA (universal schema), questions to ask, reverse calculator, future-payment dates, commitment map. `src/lib/concepts.ts`: fixed explainers for the learning nudge and misconceptions.
 - Pages: `/firewall` (Commitment Firewall demo), `/commitments` (commitment map), `/reverse`, `/diff` (contract diff), `/developers`.
-- **Car decision journey** (`/decide/car`, the MVP): `src/lib/sim.ts` is its tested engine (financial picture, self-reported credit profile, future events, finance scenarios, month-by-month simulation, hidden cost, what-ifs, careful wording). UI in `src/components/CarJourney.tsx` + `CarParts.tsx`. One-off money is never recurring; credit profile never feeds affordability; every number carries a source badge.
+- **Car decision journey** (`/check`, the MVP; `/decide/car` redirects there; the old cost checker is `/cost-checker`). Stages come from `src/lib/decision.ts`, reusable for other decisions: `src/lib/sim.ts` is its tested engine (financial picture, self-reported credit profile, future events, finance scenarios, month-by-month simulation, hidden cost, what-ifs, careful wording). UI in `src/components/CarJourney.tsx` + `CarParts.tsx`. One-off money is never recurring; credit profile never feeds affordability; every number carries a source badge.
 - Home is a decision dashboard (`Dashboard.tsx`); other goals use the simplified wizard (`/plan`, `journey.ts`) and `/start` helps people who aren’t sure.
 - `analysis/rates_vs_assets.py`: pandas script correlating asset moves with rate changes (same sources).
 
