@@ -1,0 +1,38 @@
+@AGENTS.md
+
+# Before You Sign
+
+Hackathon prototype for UKFinnovator Bristol 2026, challenge “Money, Explained: Making Financial Decisions Easier” (sponsor: EdTechLab).
+Users enter a commitment-based product (loan, credit card, overdraft, BNPL, subscription, household bill) and see its real cost, risks, a repayment chart and a side-by-side comparison. AI explains and reads pasted small print; it never recommends.
+
+## Judging rubric (keep work pointed at this)
+- 20% Problem understanding, challenge fit and impact
+- 30% Prototype, functionality, usability and feasibility
+- 20% Technical and domain quality
+- 20% Responsible design, safety and user protection
+- 10% Teamwork and showcase communication
+
+## Stack
+- Next.js 16 App Router, React 19, TypeScript, plain CSS (`src/app/globals.css`). No Tailwind.
+- Anthropic TypeScript SDK in route handlers only (`src/app/api/*`). Model: `claude-opus-5-5`.
+- Vitest for unit tests. Deployed on Vercel.
+
+## Map
+- `src/lib/finance.ts`: products, field definitions, `simulate()`, `explain()`, `risks()`. All money maths lives here and is pure.
+- `src/lib/finance.test.ts`: tests for the maths. Add one for every formula change.
+- `src/lib/store.ts`: browser-only state (draft + saved comparisons) in localStorage via `useSyncExternalStore`.
+- `src/lib/ai.ts`: server-only Anthropic client and system prompts.
+- `src/components/Header.tsx`: mega menu, driven by `src/lib/nav.ts`.
+- `src/components/Checker.tsx`: the cost checker. `ComparePanel.tsx`: comparison table and chart.
+
+## Commands
+- `npm run dev`: local dev server on http://localhost:3000
+- `npm run check`: lint + typecheck + tests. Run before every commit.
+- `npm run build`: production build (what Vercel runs)
+
+## Non-negotiables
+- Never present output as financial advice or tell the user which product to choose. Copy says “explain”, never “recommend”.
+- Every figure shown comes from `finance.ts`, never from the model.
+- AI features must degrade gracefully: if `ANTHROPIC_API_KEY` is missing the API returns 503 and the UI says AI is off.
+- No real bank connections, payments or personal data storage. User figures stay in the browser.
+- Follow the design rules in `.claude/rules/code-style.md` (Revolut-style monochrome, pill controls).

@@ -1,0 +1,875 @@
+<title>Before You Sign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#EEF2F1; --surface:#FFFFFF; --sunk:#E3E9E7; --line:#CBD5D2; --line-soft:#DDE4E2;
+  --ink:#13211F; --ink-2:#3E504C; --muted:#64746F;
+  --accent:#0B6E69; --accent-ink:#FFFFFF; --accent-soft:#D5ECE9;
+  --cost:#C2410C; --cost-soft:#FBE3D6;
+  --high:#B4231A; --high-soft:#F8DEDA; --watch:#9A6200; --watch-soft:#F7EACB; --info:#2D5F8B; --info-soft:#DCE8F3;
+  --s1:#0B6E69; --s2:#8A3B8F; --s3:#C07A12; --s4:#2D5F8B;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0E1615; --surface:#162120; --sunk:#1D2A28; --line:#30413E; --line-soft:#25332F;
+    --ink:#E4EDEB; --ink-2:#B8C7C3; --muted:#8C9D98;
+    --accent:#4FBFB5; --accent-ink:#06201E; --accent-soft:#173B38;
+    --cost:#F08A4B; --cost-soft:#3A2418;
+    --high:#F2796E; --high-soft:#3B1D1A; --watch:#E3B04B; --watch-soft:#352A13; --info:#7EB2E0; --info-soft:#18283A;
+    --s1:#4FBFB5; --s2:#D08AD6; --s3:#E8A93E; --s4:#7EB2E0;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0E1615; --surface:#162120; --sunk:#1D2A28; --line:#30413E; --line-soft:#25332F;
+  --ink:#E4EDEB; --ink-2:#B8C7C3; --muted:#8C9D98;
+  --accent:#4FBFB5; --accent-ink:#06201E; --accent-soft:#173B38;
+  --cost:#F08A4B; --cost-soft:#3A2418;
+  --high:#F2796E; --high-soft:#3B1D1A; --watch:#E3B04B; --watch-soft:#352A13; --info:#7EB2E0; --info-soft:#18283A;
+  --s1:#4FBFB5; --s2:#D08AD6; --s3:#E8A93E; --s4:#7EB2E0;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;padding-inline:20px;padding-block:0 48px}
+.wrap{max-width:1240px;margin:0 auto}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.15}
+p{margin:0}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;padding-block:28px 18px;border-bottom:2px solid var(--ink)}
+.brand h1{font-size:clamp(30px,4vw,44px);font-weight:800;letter-spacing:-.02em}
+.brand h1 span{color:var(--accent)}
+.brand p{color:var(--ink-2);max-width:56ch;margin-top:4px}
+.promises{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0}
+.promises li{font-size:13px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 12px;color:var(--ink-2)}
+.promises b{color:var(--ink)}
+
+/* layout */
+.app{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:28px;margin-top:24px;align-items:start}
+@media (max-width:900px){.app{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.step{display:grid;gap:12px}
+.step + .step{margin-top:22px;padding-top:20px;border-top:1px dashed var(--line)}
+.step h2{font-size:19px;display:flex;gap:10px;align-items:baseline}
+.step h2 .n{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:600}
+
+.types{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.type{border:1.5px solid var(--line);background:var(--surface);border-radius:8px;padding:9px 11px;text-align:left;cursor:pointer;display:grid;gap:1px}
+.type b{font-size:15px}
+.type small{color:var(--muted);font-size:12.5px;line-height:1.3}
+.type:hover{border-color:var(--accent)}
+.type[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+
+.fields{display:grid;gap:14px}
+.field{display:grid;gap:4px}
+.field label{font-weight:700;font-size:14.5px}
+.field .help{font-size:13px;color:var(--muted);line-height:1.4}
+.inp{display:flex;align-items:stretch;border:1.5px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.inp:focus-within{border-color:var(--accent)}
+.inp span{display:flex;align-items:center;padding:0 10px;background:var(--sunk);color:var(--ink-2);font-size:14px;white-space:nowrap}
+.inp input,.inp select{border:0;background:transparent;padding:8px 10px;width:100%;min-width:0;font-family:var(--mono);font-size:15px;outline:none}
+.inp select{font-family:var(--body)}
+.field.filled .inp{border-color:var(--info);box-shadow:0 0 0 3px var(--info-soft)}
+.field.filled label::after{content:"from your text";margin-left:8px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--info)}
+
+.btn{border:1.5px solid var(--ink);background:var(--ink);color:var(--bg);border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer}
+.btn:hover{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{border-color:var(--accent);color:var(--accent);background:transparent}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:5px 10px;font-size:13.5px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+textarea{width:100%;border:1.5px solid var(--line);border-radius:8px;background:var(--surface);padding:10px;font-size:14px;min-height:120px;resize:vertical}
+textarea:focus{outline:none;border-color:var(--accent)}
+details.paste summary{cursor:pointer;font-weight:700;list-style:none;display:flex;justify-content:space-between;gap:8px}
+details.paste summary::-webkit-details-marker{display:none}
+details.paste summary::after{content:"+";font-family:var(--mono);color:var(--accent)}
+details.paste[open] summary::after{content:"–"}
+details.paste .body{display:grid;gap:10px;margin-top:10px}
+.note{font-size:13px;color:var(--muted);line-height:1.45}
+
+/* results */
+.results{display:grid;gap:20px;min-width:0}
+.scenario{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.tag{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:4px;background:var(--sunk);color:var(--ink-2)}
+.headline{font-size:clamp(24px,3.1vw,36px);font-weight:700;letter-spacing:-.015em;line-height:1.2;max-width:28ch}
+.headline em{font-style:normal;color:var(--cost)}
+.headline strong{color:var(--accent)}
+.sub{color:var(--ink-2);max-width:65ch}
+
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden}
+@media (max-width:640px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.tile{padding:14px 16px;display:grid;gap:2px;border-right:1px solid var(--line-soft)}
+.tile:last-child{border-right:0}
+@media (max-width:640px){.tile:nth-child(2){border-right:0}.tile:nth-child(-n+2){border-bottom:1px solid var(--line-soft)}}
+.tile .v{font-family:var(--mono);font-size:clamp(19px,2.2vw,24px);font-weight:600;font-variant-numeric:tabular-nums}
+.tile .d{font-size:12.5px;color:var(--muted);line-height:1.35}
+.tile.cost .v{color:var(--cost)}
+.term-bar{display:flex;gap:6px;flex-wrap:wrap}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px}
+.card h3{font-size:18px;margin-bottom:10px}
+.chart-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:6px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--ink-2)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.chart{position:relative;overflow-x:auto}
+.chart svg{display:block;width:100%}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12.5px;border-radius:6px;padding:7px 9px;line-height:1.4;white-space:nowrap;transform:translate(-50%,-100%);font-family:var(--mono)}
+.tip b{font-family:var(--body)}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:1100px){.two{grid-template-columns:1fr}}
+.plain p + p{margin-top:10px}
+.plain .mark{background:var(--accent-soft);padding:0 3px;border-radius:3px}
+.gloss{margin-top:14px;border-top:1px dashed var(--line);padding-top:12px;display:grid;gap:8px}
+.gloss dt{font-weight:700;font-size:14px}
+.gloss dd{margin:0;font-size:14px;color:var(--ink-2)}
+
+.risks{display:grid;gap:10px;list-style:none;margin:0;padding:0}
+.risk{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;padding:10px 12px;border-radius:8px;border-left:4px solid}
+.risk.high{background:var(--high-soft);border-color:var(--high)}
+.risk.watch{background:var(--watch-soft);border-color:var(--watch)}
+.risk.info{background:var(--info-soft);border-color:var(--info)}
+.sev{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding-top:3px;white-space:nowrap}
+.high .sev{color:var(--high)} .watch .sev{color:var(--watch)} .info .sev{color:var(--info)}
+.risk b{display:block}
+.risk p{grid-column:2;font-size:14px;color:var(--ink-2)}
+
+.ai .out{white-space:pre-wrap;font-size:15px;background:var(--sunk);border-radius:8px;padding:14px;min-height:60px;margin-top:10px}
+.ai .out:empty{display:none}
+.ai .meta{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12.5px;color:var(--muted)}
+.ai .badge{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--info-soft);color:var(--info);padding:2px 7px;border-radius:4px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{border:1px solid var(--line);background:transparent;border-radius:999px;padding:4px 11px;font-size:13.5px;cursor:pointer}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.ask{display:flex;gap:8px;margin-top:10px}
+.ask input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface)}
+.ask input:focus{outline:none;border-color:var(--accent)}
+.thread{display:grid;gap:8px;margin-top:10px}
+.msg{padding:10px 12px;border-radius:8px;font-size:15px;white-space:pre-wrap}
+.msg.me{background:var(--accent-soft);justify-self:end;max-width:85%}
+.msg.ai{background:var(--sunk)}
+
+.save{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:14px 16px;border:1.5px dashed var(--line);border-radius:var(--r)}
+.save input{flex:1;min-width:160px;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface)}
+
+/* compare */
+.compare{margin-top:40px;border-top:2px solid var(--ink);padding-top:22px;display:grid;gap:18px}
+.compare h2{font-size:clamp(22px,2.6vw,30px)}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr:last-child th,tbody tr:last-child td{border-bottom:0}
+thead th{font-family:var(--display);font-size:16px;border-bottom:1px solid var(--line)}
+thead th .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:7px}
+tbody th{font-weight:700;font-size:14px;color:var(--ink-2);white-space:nowrap;width:1%}
+td.num{font-size:15px}
+td.lo{font-weight:600}
+td.lo::after{content:"lowest";margin-left:8px;font-family:var(--body);font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);padding:1px 6px;border-radius:3px}
+.cmp-actions{display:flex;gap:6px;margin-top:6px}
+.empty{padding:24px;color:var(--muted)}
+
+footer{margin-top:40px;display:grid;grid-template-columns:repeat(3,1fr);gap:20px;font-size:14px;color:var(--ink-2);border-top:1px solid var(--line);padding-top:20px}
+@media (max-width:800px){footer{grid-template-columns:1fr}}
+footer h3{font-size:15px;margin-bottom:6px;color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){.tile .v,.headline{transition:color .2s}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Before You <span>Sign</span></h1>
+      <p>Put in the details of a loan, card, overdraft, Buy Now Pay Later plan or regular bill. See what it really costs, what could go wrong, and how it compares.</p>
+    </div>
+    <ul class="promises" aria-label="How this tool works">
+      <li><b>Explains,</b> never recommends</li>
+      <li><b>Your numbers</b> stay in this browser</li>
+      <li><b>AI is optional</b> and labelled</li>
+    </ul>
+  </header>
+
+  <div class="app">
+    <aside class="panel" aria-label="Product details">
+      <div class="step">
+        <h2><span class="n">1</span>What are you looking at?</h2>
+        <div class="types" id="types" role="group" aria-label="Product type"></div>
+      </div>
+      <div class="step">
+        <h2><span class="n">2</span>Enter the details</h2>
+        <p class="note">Copy these from the advert, the key facts sheet or the checkout page.</p>
+        <div class="fields" id="fields"></div>
+      </div>
+      <div class="step">
+        <h2><span class="n">3</span>Can it fit your month? <span class="note" style="font-family:var(--body)">optional</span></h2>
+        <div class="field">
+          <label for="spare">Money left after bills each month</label>
+          <div class="inp"><span>£</span><input id="spare" type="number" min="0" step="10" inputmode="decimal" placeholder="e.g. 250"></div>
+          <p class="help">Used only to show how much of your spare money the payment takes. It is not saved or sent anywhere.</p>
+        </div>
+      </div>
+      <div class="step">
+        <details class="paste" id="pasteBox">
+          <summary>Paste the small print instead</summary>
+          <div class="body">
+            <p class="note">Paste the terms or key facts text. AI reads it and fills in the form. You check every value before relying on it.</p>
+            <textarea id="pasteText" aria-label="Product terms text" placeholder="Paste the terms here…"></textarea>
+            <div class="row">
+              <button class="btn sm" id="pasteGo" type="button">Fill in the form</button>
+              <button class="btn ghost sm" id="pasteSample" type="button">Use example text</button>
+            </div>
+            <div id="pasteOut" class="note" aria-live="polite"></div>
+          </div>
+        </details>
+      </div>
+    </aside>
+
+    <main class="results" aria-live="polite">
+      <div class="scenario">
+        <span class="tag" id="scenarioTag">Example: paying for a £1,200 laptop</span>
+        <button class="btn ghost sm" id="resetBtn" type="button">Start from blank</button>
+      </div>
+      <h2 class="headline" id="headline"></h2>
+      <p class="sub" id="subline"></p>
+
+      <div class="tiles" id="tiles"></div>
+
+      <section class="card" aria-labelledby="chartTitle">
+        <div class="chart-head">
+          <h3 id="chartTitle" style="margin:0">Where your money goes over time</h3>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div class="chart" id="chart"></div>
+      </section>
+
+      <div class="two">
+        <section class="card plain" aria-labelledby="plainTitle">
+          <h3 id="plainTitle">In plain English</h3>
+          <div id="plain"></div>
+          <dl class="gloss" id="gloss"></dl>
+        </section>
+        <section class="card" aria-labelledby="riskTitle">
+          <h3 id="riskTitle">Things to check before you sign</h3>
+          <ul class="risks" id="risks"></ul>
+        </section>
+      </div>
+
+      <section class="card ai" id="aiCard" aria-labelledby="aiTitle">
+        <div class="row" style="justify-content:space-between">
+          <h3 id="aiTitle" style="margin:0">Ask about this</h3>
+          <span class="badge">AI assistant</span>
+        </div>
+        <p class="note" id="aiNote">AI can explain these numbers in your own words and answer questions. It sees only what is on this page. It will not tell you whether to take the product.</p>
+        <div class="chips" id="aiChips"></div>
+        <form class="ask" id="askForm">
+          <input id="askInput" type="text" placeholder="e.g. What happens if I pay this off early?" aria-label="Your question">
+          <button class="btn" type="submit" id="askBtn">Ask</button>
+          <button class="btn ghost" type="button" id="stopBtn" hidden>Stop</button>
+        </form>
+        <div class="thread" id="thread"></div>
+      </section>
+
+      <div class="save">
+        <label for="saveName" class="label">Save to compare</label>
+        <input id="saveName" type="text" placeholder="Name this option">
+        <button class="btn" id="saveBtn" type="button">Add to comparison</button>
+      </div>
+    </main>
+  </div>
+
+  <section class="compare" aria-labelledby="cmpTitle">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="cmpTitle">Side by side</h2>
+      <p class="note" style="max-width:52ch">The lowest number isn't always the right fit. A lower total can mean a higher monthly payment, or less flexibility. The choice is yours.</p>
+    </div>
+    <div class="tbl-wrap" id="cmpTable"></div>
+    <section class="card" id="cmpChartCard">
+      <div class="chart-head">
+        <h3 style="margin:0">Total paid over time</h3>
+        <div class="legend" id="cmpLegend"></div>
+      </div>
+      <div class="chart" id="cmpChart"></div>
+    </section>
+  </section>
+
+  <footer>
+    <div>
+      <h3>What this is</h3>
+      <p>A prototype to help you understand a product before you commit. Figures are estimates from what you enter, using standard repayment maths. They will differ from the provider's exact figures.</p>
+    </div>
+    <div>
+      <h3>What this is not</h3>
+      <p>Not financial advice, and not connected to any bank. It does not check your credit, store your data or make payments. Always read the provider's own documents.</p>
+    </div>
+    <div>
+      <h3>Free, impartial help (UK)</h3>
+      <p>MoneyHelper: moneyhelper.org.uk, 0800 138 7777.<br>StepChange debt charity: stepchange.org, 0800 138 1111.</p>
+    </div>
+  </footer>
+</div>
+
+<script>
+/* ---------- formatting ---------- */
+const gbp0 = new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP',maximumFractionDigits:0});
+const gbp2 = new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP',minimumFractionDigits:2,maximumFractionDigits:2});
+const money = (v, exact) => (exact || Math.abs(v) < 100) ? gbp2.format(v) : gbp0.format(v);
+const pct = v => (+v).toLocaleString('en-GB',{maximumFractionDigits:2}) + '%';
+function dur(m){
+  m = Math.round(m * 10) / 10;
+  if (m < 1) { const w = Math.round(m * 4.345); return w <= 1 ? '1 week' : w + ' weeks'; }
+  m = Math.round(m);
+  const y = Math.floor(m/12), r = m % 12, p = [];
+  if (y) p.push(y + (y===1?' year':' years'));
+  if (r) p.push(r + (r===1?' month':' months'));
+  return p.join(' ') || '0 months';
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const mr = apr => Math.pow(1 + (+apr||0)/100, 1/12) - 1;
+
+/* ---------- products ---------- */
+const PRODUCTS = {
+  loan:{label:'Loan', blurb:'Personal loan, car or store finance', credit:true, fields:[
+    {id:'amount',label:'Amount borrowed',pre:'£',def:5000,step:100},
+    {id:'apr',label:'Interest rate (APR)',post:'%',def:9.9,step:0.1,help:'The yearly cost of borrowing. Lenders must show this.'},
+    {id:'term',label:'Repayment term',post:'months',def:48,step:1},
+    {id:'fee',label:'Arrangement fee',pre:'£',def:0,step:5,help:'Any one-off fee to set the loan up.'},
+    {id:'lateFee',label:'Late payment fee',pre:'£',def:12,step:1},
+  ]},
+  card:{label:'Credit card', blurb:'Paying off a card balance', credit:true, fields:[
+    {id:'balance',label:'Balance you will owe',pre:'£',def:1200,step:50},
+    {id:'apr',label:'Purchase rate (APR)',post:'%',def:24.9,step:0.1,help:'The rate charged on what you spend, once any 0% offer ends.'},
+    {id:'intro',label:'0% interest period',post:'months',def:0,step:1,help:'Put 0 if there is no introductory offer.'},
+    {id:'payType',label:'How you plan to repay',type:'select',def:'fixed',options:[['fixed','A fixed amount each month'],['min','Only the minimum payment']]},
+    {id:'fixedPay',label:'Fixed monthly payment',pre:'£',def:50,step:5,showIf:v=>v.payType==='fixed'},
+    {id:'annualFee',label:'Annual fee',pre:'£',def:0,step:1},
+    {id:'lateFee',label:'Late payment fee',pre:'£',def:12,step:1},
+  ]},
+  overdraft:{label:'Overdraft', blurb:'Going below £0 in your current account', credit:true, fields:[
+    {id:'amount',label:'How far overdrawn',pre:'£',def:800,step:50},
+    {id:'ear',label:'Overdraft rate (EAR)',post:'%',def:39.9,step:0.1,help:'EAR is the yearly interest rate on an overdraft. Many UK banks charge around 35–40%.'},
+    {id:'buffer',label:'Interest-free buffer',pre:'£',def:0,step:25,help:'Some accounts charge nothing on the first part of the overdraft.'},
+    {id:'repay',label:'Amount you can pay back each month',pre:'£',def:100,step:10},
+    {id:'monthlyFee',label:'Monthly account fee',pre:'£',def:0,step:1},
+  ]},
+  bnpl:{label:'Buy Now Pay Later', blurb:'Split a purchase into instalments', credit:true, fields:[
+    {id:'price',label:'Purchase price',pre:'£',def:1200,step:10},
+    {id:'n',label:'Number of instalments',post:'payments',def:3,step:1},
+    {id:'interval',label:'How often you pay',type:'select',def:'month',options:[['month','Monthly'],['fortnight','Every two weeks']]},
+    {id:'apr',label:'Interest (APR)',post:'%',def:0,step:0.1,help:'Pay-in-3 plans are usually 0%. Longer "pay monthly" plans often charge interest.'},
+    {id:'lateFee',label:'Late fee per missed payment',pre:'£',def:5,step:1},
+    {id:'missed',label:'"What if" I miss this many payments',post:'missed',def:0,step:1,help:'A stress test. Leave at 0 for the normal plan.'},
+  ]},
+  subscription:{label:'Subscription', blurb:'Streaming, gym, apps, boxes', credit:false, fields:[
+    {id:'monthly',label:'Full monthly price',pre:'£',def:14.99,step:0.5},
+    {id:'introPrice',label:'Introductory price',pre:'£',def:4.99,step:0.5,help:'The deal price at the start. Same as the full price if there is no deal.'},
+    {id:'introMonths',label:'Introductory period',post:'months',def:3,step:1},
+    {id:'rise',label:'Expected yearly price rise',post:'%',def:5,step:0.5},
+    {id:'years',label:'How long you might keep it',post:'years',def:3,step:1},
+    {id:'cancelFee',label:'Cancellation fee',pre:'£',def:0,step:1},
+  ]},
+  household:{label:'Household bill', blurb:'Phone, broadband, energy contract', credit:false, fields:[
+    {id:'monthly',label:'Monthly price',pre:'£',def:32,step:0.5},
+    {id:'upfront',label:'Upfront cost',pre:'£',def:49,step:1},
+    {id:'term',label:'Contract length',post:'months',def:24,step:1},
+    {id:'riseAmt',label:'Yearly price rise',pre:'£',post:'/month',def:3,step:0.5,help:'Many UK phone and broadband contracts now state rises in pounds and pence, usually each April.'},
+    {id:'exitFee',label:'Fee to leave early',pre:'£',def:180,step:5},
+  ]},
+};
+
+const GLOSSARY = {
+  loan:[['APR','Annual Percentage Rate. The yearly cost of borrowing, including most fees. Use it to compare like with like.'],['Representative APR','The rate at least half of approved customers get. You might be offered more.'],['Total amount payable','Everything you will pay back, including interest and fees.']],
+  card:[['Minimum payment','The smallest amount you must pay each month. Paying only this keeps you in debt much longer.'],['Introductory 0%','A period with no interest. After it ends, the normal APR applies to anything left.'],['Persistent debt','The FCA term for paying more in interest and fees than you repay over 18 months. Your card provider must contact you if this happens.']],
+  overdraft:[['EAR','Equivalent Annual Rate. How overdraft interest is shown. It works like a yearly interest rate.'],['Arranged overdraft','An overdraft agreed with your bank in advance. Going past the limit can lead to refused payments.'],['Buffer','An amount you can be overdrawn without paying interest.']],
+  bnpl:[['Instalment','One of the equal payments you split the price into.'],['Late fee','A charge if a payment fails. Missed payments can also be reported to credit reference agencies.'],['Pay monthly plan','A longer BNPL plan that may charge interest, unlike most pay-in-3 plans.']],
+  subscription:[['Introductory price','A lower starting price that rises automatically unless you cancel.'],['Auto-renewal','The subscription continues and charges you until you cancel it.'],['Notice period','How long before cancelling takes effect.']],
+  household:[['Minimum term','The length of contract you are committed to.'],['Early exit fee','What you pay to leave before the contract ends. Often close to the remaining payments.'],['Mid-contract price rise','A price increase built into the contract, often each April.']],
+};
+
+/* ---------- simulation ---------- */
+function simulate(type, v){
+  const s = []; let principal = 0, never = false, advertised = 0, extra = {};
+  if (type === 'loan'){
+    principal = +v.amount||0; const r = mr(v.apr), n = Math.max(1, Math.round(+v.term||1));
+    const pay = r ? principal*r/(1-Math.pow(1+r,-n)) : principal/n;
+    if (+v.fee) s.push({t:0,pay:+v.fee,interest:0,fee:+v.fee,bal:principal});
+    let bal = principal;
+    for (let i=1;i<=n;i++){ const int = bal*r; bal = bal+int-pay; s.push({t:i,pay,interest:int,fee:0,bal:Math.max(0,bal)}); }
+  }
+  else if (type === 'card'){
+    principal = +v.balance||0; const r = mr(v.apr), intro = +v.intro||0; let bal = principal, i = 0;
+    while (bal > 0.005 && i < 360){
+      i++; const pre = bal, int = i<=intro ? 0 : bal*r;
+      const fee = (+v.annualFee>0 && (i-1)%12===0) ? +v.annualFee : 0;
+      bal += int + fee;
+      let pay = v.payType==='min' ? Math.max(25, pre*0.01 + int + fee) : (+v.fixedPay||0);
+      pay = Math.min(pay, bal); bal -= pay;
+      s.push({t:i,pay,interest:int,fee,bal});
+    }
+    never = bal > 0.005; extra.left = bal;
+  }
+  else if (type === 'overdraft'){
+    principal = +v.amount||0; const r = mr(v.ear), buf = +v.buffer||0; let bal = principal, i = 0;
+    while (bal > 0.005 && i < 120){
+      i++; const int = Math.max(0, bal-buf)*r, fee = +v.monthlyFee||0;
+      bal += int + fee; const pay = Math.min(+v.repay||0, bal); bal -= pay;
+      s.push({t:i,pay,interest:int,fee,bal});
+    }
+    never = bal > 0.005; extra.left = bal;
+  }
+  else if (type === 'bnpl'){
+    principal = +v.price||0; const n = Math.max(1, Math.round(+v.n||1));
+    const per = v.interval==='fortnight' ? 14/30.44 : 1, r = +v.apr>0 ? mr(v.apr) : 0;
+    const pay = r ? principal*r/(1-Math.pow(1+r,-n)) : principal/n;
+    const missed = Math.min(n, Math.max(0, Math.round(+v.missed||0)));
+    let bal = principal;
+    for (let i=1;i<=n;i++){
+      const t = r ? i*per : (i-1)*per, int = bal*r; bal = bal+int-pay;
+      const fee = i<=missed ? (+v.lateFee||0) : 0;
+      s.push({t,pay:pay+fee,interest:int,fee,bal:Math.max(0,bal)});
+    }
+  }
+  else if (type === 'subscription'){
+    const months = Math.max(1, Math.round((+v.years||1)*12)), im = +v.introMonths||0;
+    for (let m=1;m<=months;m++){
+      const price = m<=im ? (+v.introPrice||0) : (+v.monthly||0)*Math.pow(1+(+v.rise||0)/100, Math.floor((m-1)/12));
+      s.push({t:m-1,pay:price,interest:0,fee:0,bal:0});
+    }
+    advertised = (im ? +v.introPrice : +v.monthly) || 0;
+    extra.headlineTotal = advertised*months;
+  }
+  else if (type === 'household'){
+    const n = Math.max(1, Math.round(+v.term||1));
+    if (+v.upfront) s.push({t:0,pay:+v.upfront,interest:0,fee:0,bal:0});
+    for (let m=1;m<=n;m++){
+      const price = (+v.monthly||0) + (+v.riseAmt||0)*Math.floor((m-1)/12);
+      s.push({t:m,pay:price,interest:0,fee:0,bal:0});
+    }
+    advertised = +v.monthly||0;
+    extra.headlineTotal = advertised*n + (+v.upfront||0);
+  }
+  s.sort((a,b)=>a.t-b.t);
+  let cum = 0; s.forEach(p => { cum += p.pay; p.cum = cum; });
+  const total = cum, interest = s.reduce((a,p)=>a+p.interest,0), fees = s.reduce((a,p)=>a+p.fee,0);
+  const reg = s.filter(p=>p.t>0 || type==='bnpl' || type==='subscription');
+  const regular = reg.length ? reg[Math.min(1, reg.length-1)].pay : 0;
+  const first = reg.length ? reg[0].pay : 0;
+  const next3 = s.filter(p=>p.t<3).reduce((a,p)=>a+p.pay,0);
+  const end = s.length ? s[s.length-1].t + (type==='subscription'?1:0) : 0;
+  const onTop = PRODUCTS[type].credit ? total - principal : total - (extra.headlineTotal||0);
+  return {s,principal,total,interest,fees,regular,first,next3,end,onTop,never,advertised,...extra};
+}
+
+/* ---------- plain English ---------- */
+function explain(type, v, m){
+  const P = [];
+  const mk = x => `<span class="mark">${x}</span>`;
+  if (type==='loan'){
+    P.push(`You borrow ${mk(money(m.principal))} and pay ${mk(money(m.regular,true))} every month for ${dur(+v.term)}.`);
+    P.push(`By the end you will have paid back ${mk(money(m.total))}. That is ${money(m.onTop)} more than you borrowed${+v.fee?`, including a ${money(+v.fee)} fee at the start`:''}.`);
+    P.push(`Each £1 you borrow costs you about ${Math.round(m.onTop/m.principal*100)}p on top. A shorter term means bigger monthly payments but less interest overall.`);
+  }
+  if (type==='card'){
+    const intro = +v.intro||0;
+    if (m.never) P.push(`At ${money(+v.fixedPay)} a month you would ${mk('never clear this balance')}. The interest added each month is bigger than, or nearly as big as, your payment.`);
+    else P.push(`You owe ${mk(money(m.principal))}. ${v.payType==='min'?'Paying only the minimum':'Paying '+money(+v.fixedPay)+' a month'}, it takes ${mk(dur(m.end))} to clear.`);
+    if (intro) P.push(`For the first ${intro} months there is no interest. After that, ${pct(v.apr)} APR applies to whatever is left.`);
+    if (!m.never) P.push(`In total you pay ${mk(money(m.total))}, of which ${money(m.interest)} is interest${m.fees?` and ${money(m.fees)} is fees`:''}.`);
+    if (v.payType==='min') P.push(`Minimum payments shrink as the balance shrinks, which is why it takes so long. Paying a fixed amount clears it faster.`);
+  }
+  if (type==='overdraft'){
+    const r = mr(v.ear), firstInt = Math.max(0,(+v.amount||0)-(+v.buffer||0))*r;
+    P.push(`Being ${money(+v.amount)} overdrawn costs about ${mk(money(firstInt,true))} in interest in the first month${+v.buffer?` (the first ${money(+v.buffer)} is interest-free)`:''}.`);
+    if (m.never) P.push(`Paying back ${money(+v.repay)} a month is ${mk('not enough to clear it')}: the interest and fees keep up with your payments.`);
+    else P.push(`Paying back ${money(+v.repay)} a month, you are back above £0 in ${mk(dur(m.end))} and pay ${money(m.onTop)} in interest and fees.`);
+    P.push(`Overdrafts are designed for short, unexpected gaps. At around ${pct(v.ear)}, they cost more than most loans or cards for longer borrowing.`);
+  }
+  if (type==='bnpl'){
+    const per = v.interval==='fortnight' ? 'every two weeks' : 'each month';
+    P.push(`You split ${mk(money(m.principal))} into ${v.n} payments of ${mk(money((m.total-m.fees)/(+v.n||1),true))}, paid ${per}.`);
+    P.push(+v.apr>0 ? `This plan charges ${pct(v.apr)} interest, so you pay back ${money(m.total-m.fees)} in total.` : `There is no interest if every payment goes through on time.`);
+    if (+v.missed) P.push(`If you miss ${v.missed} payment${+v.missed>1?'s':''}, late fees add ${mk(money(m.fees))}, and the missed payment may show on your credit file.`);
+    P.push(`The whole amount is ${m.end<1?'due within a month':'paid off in about '+dur(m.end)}. It feels like a small cost, but it is still borrowing.`);
+  }
+  if (type==='subscription'){
+    const im = +v.introMonths||0;
+    if (im) P.push(`It starts at ${mk(money(+v.introPrice,true))} a month for ${im} months, then goes up to ${mk(money(+v.monthly,true))} automatically unless you cancel.`);
+    else P.push(`It costs ${mk(money(+v.monthly,true))} a month.`);
+    P.push(`If you keep it for ${dur((+v.years||1)*12)}${+v.rise?` and the price rises by ${pct(v.rise)} a year`:''}, you pay ${mk(money(m.total))} in total.`);
+    P.push(`That is ${money(m.total/((+v.years||1)*52),true)} a week on average.`);
+  }
+  if (type==='household'){
+    P.push(`You commit to ${mk(dur(+v.term))} at ${money(+v.monthly,true)} a month${+v.upfront?`, plus ${money(+v.upfront)} upfront`:''}.`);
+    if (+v.riseAmt) P.push(`The price goes up by ${money(+v.riseAmt,true)} a month each year, so by the final year you pay ${mk(money(+v.monthly + (+v.riseAmt)*Math.floor((+v.term-1)/12),true))} a month.`);
+    P.push(`Over the whole contract you pay ${mk(money(m.total))}. Leaving early costs ${money(+v.exitFee)}.`);
+  }
+  return P.map(p=>`<p>${p}</p>`).join('');
+}
+
+/* ---------- risks ---------- */
+function risks(type, v, m, spare){
+  const R = [], add = (lvl,title,body) => R.push({lvl,title,body});
+  if (type==='loan'){
+    if (+v.apr>=30) add('high','This is high-cost credit',`At ${pct(v.apr)} APR, borrowing is expensive. Check whether a lower-rate option is available to you.`);
+    if (+v.fee>0) add('watch','There is an upfront fee',`${money(+v.fee)} is charged at the start. Some adverts show the rate without it.`);
+    if (+v.term>24){
+      const alt = simulate('loan',{...v,term:Math.max(12,+v.term-24)});
+      add('watch','A longer term costs more overall',`Over ${dur(+v.term-24)} instead, payments rise to ${money(alt.regular,true)} a month, but you save ${money(m.total-alt.total)} in interest.`);
+    }
+    add('info','Early repayment',`You have the right to repay a loan early. The lender can charge up to 1–2 months' interest for doing so. Ask what it would be.`);
+    add('info','Missing a payment',`A ${money(+v.lateFee||0)} late fee, plus a mark on your credit file that can make future borrowing harder or dearer.`);
+  }
+  if (type==='card'){
+    if (m.never) add('high','Your payment never clears the balance',`After 30 years you would still owe ${money(m.left)}. Try a higher monthly amount to see when it clears.`);
+    if (v.payType==='min' && !m.never) add('high','Minimum payments only',`It takes ${dur(m.end)} and costs ${money(m.interest)} in interest. That is ${Math.round(m.interest/m.principal*100)}% of what you spent.`);
+    const first18 = m.s.filter(p=>p.t<=18), cost18 = first18.reduce((a,p)=>a+p.interest+p.fee,0), paid18 = first18.reduce((a,p)=>a+p.pay,0);
+    if (m.s.length>=18 && cost18 > paid18-cost18) add('high','Risk of "persistent debt"',`In the first 18 months you'd pay ${money(cost18)} in interest and fees but only ${money(paid18-cost18)} off the balance.`);
+    if (+v.intro>0){ const left = m.s.find(p=>p.t===+v.intro); if (left && left.bal>0) add('watch',`The 0% offer ends after month ${v.intro}`,`You'd still owe ${money(left.bal)} at that point, and ${pct(v.apr)} APR starts on it.`); }
+    if (+v.annualFee>0) add('watch','Annual fee',`${money(+v.annualFee)} a year is added to your balance while you have the card.`);
+    add('info','Late or missed payments',`A ${money(+v.lateFee||0)} fee, and you can lose any 0% offer. It may also be reported to credit reference agencies.`);
+  }
+  if (type==='overdraft'){
+    if (+v.ear>=30) add('high','Expensive for longer borrowing',`${pct(v.ear)} EAR is higher than most personal loans and many credit cards.`);
+    if (m.never) add('high','Payments don\'t reduce the overdraft',`Interest and fees match your repayment, so the balance stays put.`);
+    else if (m.end>6) add('watch','Using it for more than a few months',`Overdrafts suit short gaps. Staying overdrawn for ${dur(m.end)} costs ${money(m.onTop)}.`);
+    add('watch','Going over your limit',`Payments can be refused, and returned payments can lead to missed bills. Ask your bank about alerts.`);
+    add('info','Your bank must help if you struggle',`Banks should contact customers who use their overdraft heavily and offer support. You can ask for help first.`);
+  }
+  if (type==='bnpl'){
+    if (+v.missed>0) add('high','Missed payments add up',`${v.missed} missed payment${+v.missed>1?'s':''} add ${money(m.fees)} in late fees and may be reported to credit reference agencies.`);
+    if (+v.apr>0) add('watch','This plan charges interest',`At ${pct(v.apr)} APR you pay ${money(m.interest)} more than the price.`);
+    if (v.interval==='fortnight') add('watch','Payments come round quickly',`A payment every two weeks can clash with when you get paid. Check the dates line up with your income.`);
+    add('watch','Several plans at once',`Each plan looks small, but three or four running together can take a big share of your month. Add up every plan you have.`);
+    add('info','It is still borrowing',`Providers may check your credit before lending and can report how you repay. A refund or return does not stop payments automatically.`);
+  }
+  if (type==='subscription'){
+    if (+v.introMonths>0 && +v.monthly>+v.introPrice) add('watch',`Price jumps after month ${v.introMonths}`,`From ${money(+v.introPrice,true)} to ${money(+v.monthly,true)} a month (${Math.round((+v.monthly/(+v.introPrice||1)-1)*100)}% more). Set a reminder before the offer ends.`);
+    if (+v.rise>0) add('watch','Yearly price rises',`At ${pct(v.rise)} a year, the monthly price could reach ${money(+v.monthly*Math.pow(1+v.rise/100, Math.max(0,(+v.years||1)-1)),true)} by year ${v.years}.`);
+    if (+v.cancelFee>0) add('watch','It costs money to leave',`A ${money(+v.cancelFee)} cancellation fee applies. Check the notice period too.`);
+    add('info','It renews automatically',`You keep paying until you cancel. Check you can cancel online as easily as you signed up.`);
+  }
+  if (type==='household'){
+    add('watch',`You are locked in for ${dur(+v.term)}`,`Leaving early costs ${money(+v.exitFee)}. Moving home or a change in income doesn't automatically end the contract.`);
+    if (+v.riseAmt>0) add('watch','Built-in price rises',`${money(+v.riseAmt,true)} a month extra each year adds ${money(m.onTop)} over the contract compared with the advertised price.`);
+    add('info','When the contract ends',`Prices often go up after the minimum term. Providers must tell you when it ends, so look out for that message and compare deals.`);
+  }
+  if (spare > 0){
+    const monthly = type==='bnpl' && v.interval==='fortnight' ? m.regular*2.17 : (m.regular||m.first);
+    const share = monthly/spare;
+    if (share > 1) add('high','More than your spare money',`About ${money(monthly)} a month is more than the ${money(spare)} you have left after bills.`);
+    else if (share > 0.3) add('watch','A big share of your spare money',`About ${money(monthly)} a month is ${Math.round(share*100)}% of what you have left after bills. Think about what happens if costs go up.`);
+    else add('info','Fits within your spare money',`About ${money(monthly)} a month is ${Math.round(share*100)}% of what you have left after bills.`);
+  }
+  const order = {high:0,watch:1,info:2};
+  return R.sort((a,b)=>order[a.lvl]-order[b.lvl]);
+}
+
+/* ---------- chart ---------- */
+function niceMax(v){ if (v<=0) return 1; const e = Math.pow(10, Math.floor(Math.log10(v))), f = v/e; return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*e; }
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function drawChart(host, series, opts={}){
+  const W = Math.max(320, host.clientWidth || 600), H = opts.h || 260, L = 64, Rm = 18, T = 16, B = 34;
+  const tMax = Math.max(1, ...series.map(s => s.pts.length ? s.pts[s.pts.length-1].t : 1));
+  const yMax = niceMax(Math.max(opts.ref||0, ...series.flatMap(s => s.pts.map(p => Math.max(p.y, p.y2||0)))) * 1.04);
+  const x = t => L + (W-L-Rm) * t / tMax, y = v => T + (H-T-B) * (1 - v / yMax);
+  const yT = [0, .25, .5, .75, 1].map(f => f*yMax);
+  const step = tMax <= 6 ? 1 : tMax <= 24 ? 3 : tMax <= 60 ? 12 : tMax <= 180 ? 24 : 60;
+  const xT = []; for (let t=0; t<=tMax+1e-9; t+=step) xT.push(t);
+  const xl = t => step>=12 ? (t/12)+'y' : t+'m';
+  let g = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(opts.label||'Chart')}">`;
+  yT.forEach(v => g += `<line x1="${L}" x2="${W-Rm}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line-soft)" stroke-width="1"/><text x="${L-8}" y="${y(v)+4}" text-anchor="end" font-size="11.5" fill="var(--muted)" font-family="var(--mono)">${money(v)}</text>`);
+  xT.forEach(t => g += `<text x="${x(t)}" y="${H-12}" text-anchor="middle" font-size="11.5" fill="var(--muted)" font-family="var(--mono)">${xl(t)}</text>`);
+  g += `<text x="${W-Rm}" y="${H-0}" text-anchor="end" font-size="11" fill="var(--muted)">${step>=12?'years':'months'}</text>`;
+  if (opts.ref){
+    g += `<line x1="${L}" x2="${W-Rm}" y1="${y(opts.ref)}" y2="${y(opts.ref)}" stroke="var(--ink-2)" stroke-dasharray="5 4" stroke-width="1.5"/>`;
+    g += `<text x="${L+6}" y="${y(opts.ref)-6}" font-size="12" fill="var(--ink-2)" font-weight="700">${esc(opts.refLabel)}: ${money(opts.ref)}</text>`;
+  }
+  series.forEach((s,si) => {
+    if (!s.pts.length) return;
+    const stepPath = pts => { let d = `M${x(0)},${y(0)}`; let prev = 0; pts.forEach(p => { d += ` L${x(p.t)},${y(prev)} L${x(p.t)},${y(p.y)}`; prev = p.y; }); return {d, last:prev}; };
+    if (s.kind === 'line'){
+      const d = s.pts.map((p,i)=>`${i?'L':'M'}${x(p.t)},${y(p.y)}`).join(' ');
+      g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-dasharray="${s.dash||''}"/>`;
+    } else {
+      const {d,last} = stepPath(s.pts), lt = s.pts[s.pts.length-1].t;
+      if (s.fill){
+        if (opts.ref){
+          g += `<clipPath id="cl${si}"><rect x="${L}" y="${T}" width="${W}" height="${Math.max(0,y(opts.ref)-T)}"/></clipPath>`;
+          g += `<path d="${d} L${x(lt)},${y(0)} Z" fill="${s.color}" fill-opacity=".16"/>`;
+          g += `<path d="${d} L${x(lt)},${y(0)} Z" fill="var(--cost)" fill-opacity=".35" clip-path="url(#cl${si})"/>`;
+        } else g += `<path d="${d} L${x(lt)},${y(0)} Z" fill="${s.color}" fill-opacity=".14"/>`;
+      }
+      g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round"/>`;
+      g += `<circle cx="${x(lt)}" cy="${y(last)}" r="4.5" fill="${s.color}"/>`;
+      if (opts.endLabels) g += `<text x="${Math.min(x(lt), W-Rm-4)}" y="${y(last)-10}" text-anchor="end" font-size="12.5" font-weight="700" fill="${s.color}" font-family="var(--mono)">${money(last)}</text>`;
+    }
+  });
+  g += `<line class="cur" x1="0" x2="0" y1="${T}" y2="${H-B}" stroke="var(--ink-2)" stroke-width="1" opacity="0"/>`;
+  g += `<rect x="${L}" y="${T}" width="${W-L-Rm}" height="${H-T-B}" fill="transparent" class="hit"/></svg><div class="tip" hidden></div>`;
+  host.innerHTML = g;
+  const svg = host.querySelector('svg'), tip = host.querySelector('.tip'), cur = host.querySelector(".cur");
+  const at = (pts, t) => { let v = 0; for (const p of pts){ if (p.t <= t + 1e-9) v = p.y; else break; } return v; };
+  const move = e => {
+    const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * (W / r.width);
+    const t = Math.max(0, Math.min(tMax, (px - L) / (W-L-Rm) * tMax));
+    const tt = Math.round(t);
+    cur.setAttribute('x1', x(tt)); cur.setAttribute('x2', x(tt)); cur.setAttribute('opacity', .5);
+    tip.innerHTML = `<b>${tt===0?'At the start':'After '+dur(tt)}</b><br>` + series.filter(s=>s.tip!==false).map(s => `${esc(s.name)}: ${money(at(s.pts, tt))}`).join('<br>');
+    tip.hidden = false; tip.style.left = (x(tt) * r.width / W) + 'px'; tip.style.top = (T + 8) + 'px';
+  };
+  svg.addEventListener('pointermove', move);
+  svg.addEventListener('pointerleave', () => { tip.hidden = true; cur.setAttribute('opacity', 0); });
+}
+
+/* ---------- state ---------- */
+const EXAMPLES = [
+  {id:'ex1', name:'Pay in 3 (BNPL)', type:'bnpl', values:{price:1200,n:3,interval:'month',apr:0,lateFee:5,missed:0}, example:true},
+  {id:'ex2', name:'Credit card, £50 a month', type:'card', values:{balance:1200,apr:24.9,intro:0,payType:'fixed',fixedPay:50,annualFee:0,lateFee:12}, example:true},
+  {id:'ex3', name:'Store finance, 24 months', type:'loan', values:{amount:1200,apr:19.9,term:24,fee:0,lateFee:12}, example:true},
+];
+const defaults = t => Object.fromEntries(PRODUCTS[t].fields.map(f => [f.id, f.def]));
+const store = {
+  get(k, d){ try { const v = localStorage.getItem('bys:'+k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v){ try { localStorage.setItem('bys:'+k, JSON.stringify(v)); } catch {} }
+};
+let state = store.get('current', {type:'card', values:{...EXAMPLES[1].values}, example:true});
+let saved = store.get('saved', EXAMPLES.map(e => ({...e})));
+let filled = new Set();
+
+/* ---------- render ---------- */
+const $ = id => document.getElementById(id);
+function renderTypes(){
+  $('types').innerHTML = Object.entries(PRODUCTS).map(([k,p]) =>
+    `<button type="button" class="type" data-type="${k}" aria-pressed="${k===state.type}"><b>${p.label}</b><small>${p.blurb}</small></button>`).join('');
+}
+function renderFields(){
+  const p = PRODUCTS[state.type], v = state.values;
+  $('fields').innerHTML = p.fields.filter(f => !f.showIf || f.showIf(v)).map(f => {
+    const ctl = f.type === 'select'
+      ? `<select id="f_${f.id}" data-id="${f.id}">${f.options.map(([val,l]) => `<option value="${val}"${v[f.id]===val?' selected':''}>${l}</option>`).join('')}</select>`
+      : `<input id="f_${f.id}" data-id="${f.id}" type="number" inputmode="decimal" min="0" step="${f.step||1}" value="${v[f.id] ?? ''}">`;
+    return `<div class="field${filled.has(f.id)?' filled':''}"><label for="f_${f.id}">${f.label}</label>
+      <div class="inp">${f.pre?`<span>${f.pre}</span>`:''}${ctl}${f.post?`<span>${f.post}</span>`:''}</div>
+      ${f.help?`<p class="help">${f.help}</p>`:''}</div>`;
+  }).join('');
+}
+let lastMetrics = null, lastRisks = [];
+function renderResults(){
+  const {type, values:v} = state, p = PRODUCTS[type], m = simulate(type, v), spare = +$('spare').value || 0;
+  lastMetrics = m;
+  $('scenarioTag').textContent = state.example ? 'Example: paying for a £1,200 laptop' : p.label + ': your figures';
+  $('scenarioTag').hidden = false;
+
+  // headline
+  let h, sub;
+  if (p.credit){
+    if (m.never){ h = `You borrow <strong>${money(m.principal)}</strong>. At this rate you <em>never pay it off</em>.`; sub = 'Your payment barely covers the interest. Try a bigger monthly amount.'; }
+    else { h = `You borrow <strong>${money(m.principal)}</strong>. You pay back <em>${money(m.total)}</em> over ${dur(m.end)}.`;
+      sub = m.onTop > 0.5 ? `That's ${money(m.onTop)} on top, about ${Math.round(m.onTop/m.principal*100)}p for every £1 borrowed.` : 'No interest or fees, as long as every payment is made on time.'; }
+  } else {
+    h = `At <strong>${money(m.advertised,true)}</strong> a month it looks small. Over ${dur(m.end)} you pay <em>${money(m.total)}</em>.`;
+    sub = m.onTop > 0.5 ? `That's ${money(m.onTop)} more than the advertised price would suggest, from price rises${type==='household'?'':' and the end of the deal'}.` : 'The price stays the same throughout.';
+  }
+  $('headline').innerHTML = h; $('subline').textContent = sub;
+
+  // tiles
+  const isFort = type==='bnpl' && v.interval==='fortnight';
+  const tiles = [
+    [type==='bnpl'?'Each payment':'Regular payment', money(m.regular,true), isFort?'every two weeks':type==='bnpl'?'each month':'a month'],
+    ['First 3 months', money(m.next3), 'what leaves your account soon'],
+    ['Total you pay', m.never ? 'Never ends' : money(m.total), m.never ? 'balance not cleared in 30 years' : 'over ' + dur(m.end)],
+    [p.credit ? 'Cost of borrowing' : 'Price rises & fees', m.never ? '—' : money(Math.max(0,m.onTop)), p.credit ? 'interest + fees' : 'above the advertised price'],
+  ];
+  $('tiles').innerHTML = tiles.map(([l,val,d],i) => `<div class="tile${i===3?' cost':''}"><span class="label">${l}</span><span class="v">${val}</span><span class="d">${d}</span></div>`).join('');
+
+  // chart
+  const series = [{name:'Total paid', color:cssVar('--accent'), fill:true, pts:m.s.map(q=>({t:q.t,y:q.cum}))}];
+  if (p.credit && m.s.some(q=>q.bal>0)) series.push({name:'Still owed', kind:'line', color:cssVar('--ink-2'), dash:'2 3', pts:[{t:0,y:m.principal},...m.s.map(q=>({t:q.t,y:q.bal}))]});
+  drawChart($('chart'), series, {ref: p.credit ? m.principal : (m.headlineTotal||0), refLabel: p.credit ? 'Borrowed' : 'Advertised price', endLabels:true, label:'Cumulative amount paid over time'});
+  $('legend').innerHTML = `<span><i style="background:var(--accent)"></i>Total paid</span>` +
+    (p.credit ? `<span><i style="background:var(--cost);opacity:.6"></i>Paid above what you borrowed</span>` : `<span><i style="background:var(--cost);opacity:.6"></i>Paid above advertised price</span>`) +
+    (series[1] ? `<span><i style="background:none;border-top:2px dotted var(--ink-2);height:0;border-radius:0"></i>Still owed</span>` : '');
+
+  $('plain').innerHTML = explain(type, v, m);
+  $('gloss').innerHTML = GLOSSARY[type].map(([t,d]) => `<div><dt>${t}</dt><dd>${d}</dd></div>`).join('');
+  lastRisks = risks(type, v, m, spare);
+  const lbl = {high:'Watch out', watch:'Check', info:'Good to know'};
+  $('risks').innerHTML = lastRisks.map(r => `<li class="risk ${r.lvl}"><span class="sev">${lbl[r.lvl]}</span><b>${esc(r.title)}</b><p>${esc(r.body)}</p></li>`).join('');
+  $('saveName').placeholder = suggestName();
+  renderChips();
+  store.set('current', state);
+}
+function suggestName(){
+  const {type, values:v} = state;
+  return {loan:`Loan, ${v.term} months at ${v.apr}%`, card: v.payType==='min'?'Card, minimum payments':`Card, £${v.fixedPay} a month`, overdraft:`Overdraft, £${v.repay} a month`,
+    bnpl:`BNPL, ${v.n} payments`, subscription:`Subscription, ${v.years} years`, household:`Contract, ${v.term} months`}[type];
+}
+function renderAll(){ renderTypes(); renderFields(); renderResults(); renderCompare(); }
+
+/* ---------- compare ---------- */
+function renderCompare(){
+  const colors = ['--s1','--s2','--s3','--s4'].map(cssVar);
+  if (!saved.length){
+    $('cmpTable').innerHTML = `<p class="empty">Nothing saved yet. Use "Add to comparison" to line up up to four options.</p>`;
+    $('cmpChartCard').hidden = true; return;
+  }
+  $('cmpChartCard').hidden = false;
+  const rows = saved.map(o => ({o, m:simulate(o.type,o.values), r:risks(o.type,o.values,simulate(o.type,o.values),0)}));
+  const lineDefs = [
+    ['Type', r => PRODUCTS[r.o.type].label, null],
+    ['Regular payment', r => money(r.m.regular,true) + (r.o.type==='bnpl'&&r.o.values.interval==='fortnight'?' / 2 wks':' / month'), r => r.m.regular],
+    ['First 3 months', r => money(r.m.next3), r => r.m.next3],
+    ['Total you pay', r => r.m.never ? 'Never ends' : money(r.m.total), r => r.m.never ? Infinity : r.m.total],
+    ['Cost on top', r => r.m.never ? '—' : money(Math.max(0,r.m.onTop)), r => r.m.never ? Infinity : r.m.onTop],
+    ['Time to finish', r => r.m.never ? '30+ years' : dur(r.m.end), r => r.m.never ? Infinity : r.m.end],
+    ['Warnings', r => { const h = r.r.filter(x=>x.lvl==='high').length, w = r.r.filter(x=>x.lvl==='watch').length; return `${h} watch out · ${w} check`; }, null],
+  ];
+  let t = `<table><thead><tr><th scope="col"><span class="label">Option</span></th>` + rows.map((r,i) =>
+    `<th scope="col"><span class="sw" style="background:${colors[i%4]}"></span>${esc(r.o.name)}${r.o.example?' <span class="tag" style="font-size:10px">Example</span>':''}
+     <div class="cmp-actions"><button class="btn ghost sm" data-load="${r.o.id}" type="button">Edit</button><button class="btn ghost sm" data-del="${r.o.id}" type="button">Remove</button></div></th>`).join('') + `</tr></thead><tbody>`;
+  lineDefs.forEach(([label, fmt, key]) => {
+    const vals = key ? rows.map(key) : null, min = vals ? Math.min(...vals) : null;
+    const showLo = vals && rows.length > 1 && vals.filter(x=>x===min).length === 1;
+    t += `<tr><th scope="row">${label}</th>` + rows.map((r,i) => `<td class="${key?'num':''}${showLo && vals[i]===min ? ' lo':''}">${fmt(r)}</td>`).join('') + `</tr>`;
+  });
+  $('cmpTable').innerHTML = t + `</tbody></table>`;
+  drawChart($('cmpChart'), rows.map((r,i) => ({name:r.o.name, color:colors[i%4], pts:r.m.s.map(q=>({t:q.t,y:q.cum}))})), {endLabels:true, h:280, label:'Total paid over time for each saved option'});
+  $('cmpLegend').innerHTML = rows.map((r,i)=>`<span><i style="background:${colors[i%4]}"></i>${esc(r.o.name)}</span>`).join('');
+  store.set('saved', saved);
+}
+
+/* ---------- events ---------- */
+$('types').addEventListener('click', e => {
+  const b = e.target.closest('[data-type]'); if (!b || b.dataset.type === state.type) return;
+  state = {type:b.dataset.type, values:defaults(b.dataset.type), example:false}; filled.clear(); renderAll();
+});
+$('fields').addEventListener('input', e => {
+  const el = e.target; if (!el.dataset.id) return;
+  const f = PRODUCTS[state.type].fields.find(x => x.id === el.dataset.id);
+  state.values[f.id] = f.type === 'select' ? el.value : (el.value === '' ? 0 : +el.value);
+  state.example = false; filled.delete(f.id); el.closest('.field').classList.remove('filled');
+  if (f.type === 'select') renderFields();
+  renderResults();
+});
+$('spare').addEventListener('input', renderResults);
+$('resetBtn').addEventListener('click', () => { state = {type:state.type, values:defaults(state.type), example:false}; filled.clear(); renderAll(); });
+$('saveBtn').addEventListener('click', () => {
+  if (saved.length >= 4){ $('saveBtn').textContent = 'Remove one first (max 4)'; setTimeout(()=>$('saveBtn').textContent='Add to comparison',2200); return; }
+  saved.push({id:'o'+Date.now(), name:$('saveName').value.trim() || suggestName(), type:state.type, values:{...state.values}});
+  $('saveName').value = ''; renderCompare();
+  $('saveBtn').textContent = 'Added'; setTimeout(()=>$('saveBtn').textContent='Add to comparison',1500);
+});
+$('cmpTable').addEventListener('click', e => {
+  const del = e.target.closest('[data-del]'), load = e.target.closest('[data-load]');
+  if (del){ saved = saved.filter(o => o.id !== del.dataset.del); renderCompare(); }
+  if (load){ const o = saved.find(x => x.id === load.dataset.load); state = {type:o.type, values:{...o.values}, example:!!o.example}; filled.clear(); renderAll(); window.scrollTo({top:0, behavior:'smooth'}); }
+});
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { renderResults(); renderCompare(); }, 150); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { renderResults(); renderCompare(); });
+new MutationObserver(() => { renderResults(); renderCompare(); }).observe(document.documentElement, {attributes:true, attributeFilter:['data-theme']});
+
+/* ---------- AI (optional) ---------- */
+const AI_RULES = `You are a plain-English explainer inside "Before You Sign", a UK tool that helps people understand a financial product before they commit.
+Rules:
+- Explain; never recommend. Do not say whether the person should or should not take this product, and do not rank products. Regulated financial advice is out of scope. If asked "should I", explain the trade-offs and say the choice is theirs.
+- Use only the figures provided. If something is not in the data, say you don't know and suggest asking the provider.
+- Write for a reading age of about 11. Short sentences. UK English and £.
+- Keep answers under 150 words. Use at most 4 short bullet points if helpful. No markdown headings, no tables.
+- If the person mentions struggling with money, mention free help from MoneyHelper (0800 138 7777) or StepChange (0800 138 1111).`;
+function pageContext(){
+  const {type, values:v} = state, p = PRODUCTS[type], m = lastMetrics;
+  const fields = p.fields.filter(f=>!f.showIf||f.showIf(v)).map(f => `${f.label}: ${f.type==='select' ? f.options.find(o=>o[0]===v[f.id])?.[1] : (f.pre||'') + v[f.id] + (f.post?' '+f.post:'')}`).join('\n');
+  return `PRODUCT: ${p.label}\nDETAILS ENTERED:\n${fields}\nCALCULATED:\nRegular payment: ${money(m.regular,true)}\nFirst 3 months: ${money(m.next3)}\nTotal paid: ${m.never?'never cleared within 30 years':money(m.total)}\nTime to finish: ${m.never?'30+ years':dur(m.end)}\n${p.credit?'Amount borrowed: '+money(m.principal)+'\nInterest: '+money(m.interest)+'\nFees: '+money(m.fees):'Above advertised price: '+money(m.onTop)}\nWARNINGS SHOWN: ${lastRisks.map(r=>r.title).join('; ')}`;
+}
+const CHIPS = {
+  loan:['Explain this loan simply','What if I repay early?','Why is APR different from the interest?'],
+  card:['Explain this simply','Why do minimum payments take so long?','What happens when the 0% ends?'],
+  overdraft:['Explain this simply','Why is an overdraft so expensive?','What if I go over my limit?'],
+  bnpl:['Explain this simply','What happens if I miss a payment?','Will this affect my credit score?'],
+  subscription:['Explain this simply','How do I avoid the price jump?','What are my cancellation rights?'],
+  household:['Explain this simply','What if I need to leave early?','What happens when the contract ends?'],
+};
+function renderChips(){ $('aiChips').innerHTML = CHIPS[state.type].map(c => `<button type="button" class="chip">${c}</button>`).join(''); }
+let turns = [], ctl = null, sample = null, aiType = null;
+function aiMsg(cls, text){ const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text; $('thread').append(d); return d; }
+const aiErr = c => ({not_granted:'AI is turned off for this page. Everything else still works.', sampling_disabled:'AI is not available on this account.', rate_limited:'Too many questions at once. Try again in a minute.', refused:'The assistant could not answer that. Try asking differently.', session_expired:'Please sign in again to use AI.'}[c] || 'Something went wrong reaching the assistant. Try again.');
+async function ask(q){
+  if (!sample || !q.trim()) return;
+  if (aiType !== state.type) { turns = []; $('thread').innerHTML = ''; aiType = state.type; }
+  aiMsg('me', q);
+  const out = aiMsg('ai', 'Thinking…');
+  turns.push({role:'user', content:q});
+  const recent = turns.slice(-6);
+  const input = [{role:'user', content: AI_RULES + '\n\nCURRENT PAGE DATA (refreshed each question):\n' + pageContext() + '\n\nThe person\'s question follows.'}, ...recent];
+  ctl = new AbortController(); $('stopBtn').hidden = false; $('askBtn').disabled = true;
+  try {
+    const {text} = await sample(input, {cache:false, signal:ctl.signal, onText:({text}) => { out.textContent = text; }});
+    turns.push({role:'assistant', content:text});
+    const note = document.createElement('div'); note.className = 'meta'; note.innerHTML = '<span class="badge">AI-written</span> Check important details against the provider\'s documents.'; out.after(note);
+  } catch(e){
+    turns.pop();
+    out.textContent = e.text || ''; if (e.code !== 'cancelled') { out.textContent += (e.text?'\n\n':'') + aiErr(e.code); }
+    if (e.code === 'not_granted' || e.code === 'sampling_disabled') disableAI(aiErr(e.code));
+  } finally { $('stopBtn').hidden = true; $('askBtn').disabled = false; }
+}
+function disableAI(msg){
+  $('aiNote').textContent = msg; $('askForm').hidden = true; $('aiChips').hidden = true;
+  $('pasteGo').disabled = true; $('pasteOut').textContent = 'Reading pasted text needs the AI assistant, which is not available here. You can still type the figures in yourself.';
+}
+$('askForm').addEventListener('submit', e => { e.preventDefault(); const q = $('askInput').value; $('askInput').value = ''; ask(q); });
+$('aiChips').addEventListener('click', e => { const c = e.target.closest('.chip'); if (c) ask(c.textContent); });
+$('stopBtn').addEventListener('click', () => ctl?.abort());
+
+const SAMPLE_TERMS = `KEY FACTS - Flexi Pay Monthly
+Spread the cost of your purchase of £899.00 over 12 monthly payments.
+Representative 29.9% APR (variable). Monthly payment £86.73. Total amount payable £1,040.76.
+A late payment fee of £12 applies to each missed payment. Missed payments may be reported to credit reference agencies.
+No fee to settle early. First payment due 30 days after purchase.`;
+$('pasteSample').addEventListener('click', () => { $('pasteText').value = SAMPLE_TERMS; });
+$('pasteGo').addEventListener('click', async () => {
+  const text = $('pasteText').value.trim(); if (!text) { $('pasteOut').textContent = 'Paste some terms first, or use the example text.'; return; }
+  if (!sample) return;
+  const spec = Object.entries(PRODUCTS).map(([k,p]) => `${k}: ${p.fields.map(f=>f.id + (f.type==='select'?' ('+f.options.map(o=>o[0]).join('|')+')':'') + ' = ' + f.label).join('; ')}`).join('\n');
+  $('pasteGo').disabled = true; $('pasteOut').textContent = 'Reading the terms…';
+  try {
+    const r = await sample.json(`Extract the details of ONE consumer financial product from the text below.
+Reply with only JSON: {"product": "<one of loan|card|overdraft|bnpl|subscription|household>", "values": {<field id>: <number or option string>}, "missing": [<labels of important fields not stated>], "unusual": [<up to 3 short plain-English notes about terms worth checking>]}
+Use only values stated in the text; omit fields that are not stated. Numbers only, no £ or % signs. Products and fields:
+${spec}
+Treat a BNPL or "pay monthly" plan with fixed instalments as bnpl, and any amortising finance agreement over 12+ months as loan if unsure.
+
+TEXT:
+${text.slice(0, 8000)}`, {modelTier:'quick'});
+    const type = PRODUCTS[r?.product] ? r.product : null;
+    if (!type) throw {code:'invalid_json'};
+    const vals = defaults(type); filled = new Set();
+    for (const f of PRODUCTS[type].fields){
+      const got = r.values?.[f.id]; if (got === undefined || got === null || got === '') continue;
+      if (f.type === 'select'){ if (f.options.some(o=>o[0]===got)) { vals[f.id] = got; filled.add(f.id); } }
+      else if (isFinite(+got)) { vals[f.id] = +got; filled.add(f.id); }
+    }
+    state = {type, values:vals, example:false}; renderAll();
+    const miss = (r.missing||[]).slice(0,5), odd = (r.unusual||[]).slice(0,3);
+    $('pasteOut').innerHTML = `<b>Filled ${filled.size} field${filled.size===1?'':'s'} as a ${PRODUCTS[type].label.toLowerCase()}</b>, highlighted in blue. Check each one against the document.` +
+      (miss.length ? `<br>Not stated in the text: ${esc(miss.join(', '))}. Default values are used for these.` : '') +
+      (odd.length ? `<br>Worth checking: ${esc(odd.join(' '))}` : '');
+  } catch(e){
+    $('pasteOut').textContent = e.code === 'invalid_json' ? 'Couldn\'t pick out the figures from that text. Try pasting just the key facts section.' : aiErr(e.code);
+    if (e.code === 'not_granted' || e.code === 'sampling_disabled') disableAI(aiErr(e.code));
+  } finally { if (sample) $('pasteGo').disabled = false; }
+});
+
+renderAll();
+(async () => {
+  sample = window.claude?.use ? await window.claude.use('sample').catch(() => null) : null;
+  if (!sample) disableAI('The AI assistant isn\'t available in this view. All the calculations, warnings and comparisons above still work without it.');
+})();
+</script>

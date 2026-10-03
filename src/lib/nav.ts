@@ -1,0 +1,84 @@
+export interface NavLink { href: string; title: string; desc: string; icon: string }
+export interface NavGroup {
+  key: string;
+  label: string;
+  intro: string;
+  links: NavLink[];
+  feature: { href: string; eyebrow: string; title: string; body: string; cta: string };
+}
+
+export const NAV: NavGroup[] = [
+  {
+    key: "products",
+    label: "Products",
+    intro: "Pick what you’re looking at. We’ll show the real cost.",
+    links: [
+      { href: "/check?type=loan", title: "Loans", desc: "Personal loans, car and store finance", icon: "loan" },
+      { href: "/check?type=card", title: "Credit cards", desc: "0% offers, minimum payments, APR", icon: "card" },
+      { href: "/check?type=overdraft", title: "Overdrafts", desc: "What being below £0 really costs", icon: "overdraft" },
+      { href: "/check?type=bnpl", title: "Buy Now Pay Later", desc: "Pay in 3, pay monthly, late fees", icon: "bnpl" },
+      { href: "/check?type=subscription", title: "Subscriptions", desc: "Intro prices and yearly rises", icon: "subscription" },
+      { href: "/check?type=household", title: "Household bills", desc: "Phone, broadband, energy contracts", icon: "household" },
+    ],
+    feature: {
+      href: "/compare",
+      eyebrow: "Example",
+      title: "Paying for a £1,200 laptop?",
+      body: "See Pay in 3, a credit card and store finance side by side, with every cost made clear.",
+      cta: "Compare the options",
+    },
+  },
+  {
+    key: "tools",
+    label: "Tools",
+    intro: "Simple tools that turn small print into understanding.",
+    links: [
+      { href: "/check", title: "Cost checker", desc: "Short-term and long-term cost in one view", icon: "calc" },
+      { href: "/compare", title: "Compare options", desc: "Up to four products, side by side", icon: "compare" },
+      { href: "/check#paste", title: "Read the small print", desc: "Paste the terms and AI fills in the form", icon: "doc" },
+      { href: "/check#afford", title: "Can it fit your month?", desc: "See the payment against your spare money", icon: "wallet" },
+    ],
+    feature: {
+      href: "/check?type=card",
+      eyebrow: "Try this",
+      title: "The minimum payment trap",
+      body: "Switch a card to minimum payments and watch how long £1,200 takes to clear.",
+      cta: "Open the checker",
+    },
+  },
+  {
+    key: "learn",
+    label: "Learn",
+    intro: "Plain-English guides to the words lenders use.",
+    links: [
+      { href: "/learn#jargon", title: "Jargon buster", desc: "APR, EAR, representative APR and more", icon: "book" },
+      { href: "/learn#apr", title: "What APR really means", desc: "Why the headline rate isn’t the whole story", icon: "chart" },
+      { href: "/learn#minimum", title: "Minimum payments", desc: "Why they keep you in debt for years", icon: "card" },
+      { href: "/learn#bnpl", title: "BNPL explained", desc: "How pay-later plans work in the UK", icon: "bnpl" },
+    ],
+    feature: {
+      href: "/learn#help",
+      eyebrow: "Free help",
+      title: "Worried about money?",
+      body: "MoneyHelper and StepChange give free, impartial help. You don’t need to be in debt to call.",
+      cta: "Where to get help",
+    },
+  },
+  {
+    key: "about",
+    label: "About",
+    intro: "How Before You Sign works, and what it will never do.",
+    links: [
+      { href: "/responsible-ai", title: "Responsible AI", desc: "Where we use AI, and the rules it follows", icon: "shield" },
+      { href: "/responsible-ai#maths", title: "How we calculate", desc: "The maths behind every number", icon: "calc" },
+      { href: "/responsible-ai#limits", title: "What we don’t do", desc: "No advice, no bank access, no data kept", icon: "help" },
+    ],
+    feature: {
+      href: "/responsible-ai",
+      eyebrow: "Our promise",
+      title: "We explain. You decide.",
+      body: "We never tell you which product to choose. The decision stays with you.",
+      cta: "Read our approach",
+    },
+  },
+];
