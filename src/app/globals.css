@@ -155,7 +155,9 @@ p { margin: 0; }
 }
 .hero { padding-block: 96px 0; text-align: center; display: grid; justify-items: center; gap: 24px; }
 .hero .lead { color: rgba(255, 255, 255, .92); }
-.hero-phone { margin-top: 32px; width: min(420px, 100%); background: var(--color-bone); color: var(--color-ink); border-radius: var(--radius-card) var(--radius-card) 0 0; padding: 20px 20px 0; text-align: left; border: 1px solid rgba(255,255,255,.6); border-bottom: 0; }
+.hero-phone { margin-top: 32px; width: min(560px, 100%); background: var(--color-bone); color: var(--color-ink); border-radius: var(--radius-card) var(--radius-card) 0 0; padding: 28px 28px 0; text-align: left; border: 1px solid rgba(255,255,255,.6); border-bottom: 0; }
+.hero-phone .tile { padding: 16px; min-width: 0; }
+.hero-phone .tile .v { font-size: clamp(20px, 2.2vw, 26px); }
 .pill-label { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: var(--radius-pill); background: var(--color-mist); font-size: 12px; font-weight: 600; letter-spacing: .015em; text-transform: uppercase; }
 
 /* ---------- surfaces ---------- */
