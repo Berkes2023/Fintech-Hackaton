@@ -3,10 +3,13 @@ import { ApiError, GoogleGenAI, ThinkingLevel, type ThinkingConfig } from "@goog
 
 // The only place the AI provider and model are configured. The key is read here, on the server, and nowhere else.
 
-/** Stable model listed as free of charge on the Gemini API free tier. Override with GEMINI_MODEL if needed. */
-export const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-/** Used automatically if the main model isn't available to this project (404). Long-standing, stable, free tier. */
-export const FALLBACK_MODEL = "gemini-2.5-flash";
+/**
+ * The one Gemini model used everywhere. Set GEMINI_MODEL (server-side) to change it without touching code.
+ * Default: gemini-3.8-flash, a stable model listed as free of charge on the Gemini API pricing page.
+ * Not verified against this project's key from here: if it isn't available, requests fail with "upstream"
+ * and the model can be changed with GEMINI_MODEL. There is deliberately no automatic fallback.
+ */
+export const MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
 /** Give up on a single AI request after this long, so the page never hangs. */
 export const TIMEOUT_MS = 45_000;
 
@@ -25,17 +28,10 @@ export function thinkingFor(model: string): ThinkingConfig | undefined {
   return model.startsWith("gemini-3") ? { thinkingLevel: ThinkingLevel.LOW } : undefined;
 }
 
-/** Runs a request on the main model; if the project can't use it, retries once on the fallback model. */
-export async function withModel<T>(run: (model: string) => Promise<T>): Promise<T> {
-  try {
-    return await run(MODEL);
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404 && MODEL !== FALLBACK_MODEL) return run(FALLBACK_MODEL);
-    throw err;
-  }
-}
+/** Response header naming the model that answered, so a demo can always tell which model produced a reply. */
+export const MODEL_HEADER = { "X-AI-Model": MODEL };
 
-export type AiErrorCode = "rate_limited" | "timeout" | "bad_request" | "upstream";
+export type AiErrorCode = "rate_limited" | "timeout" | "bad_request" | "model_unavailable" | "upstream";
 
 /** Maps any AI failure to a small set of codes the UI already understands. Never exposes provider messages. */
 export function classify(err: unknown, signal?: AbortSignal): AiErrorCode {
@@ -43,6 +39,7 @@ export function classify(err: unknown, signal?: AbortSignal): AiErrorCode {
   if (err instanceof ApiError) {
     if (err.status === 429) return "rate_limited";
     if (err.status === 400) return "bad_request";
+    if (err.status === 404) return "model_unavailable";
   }
   return "upstream";
 }

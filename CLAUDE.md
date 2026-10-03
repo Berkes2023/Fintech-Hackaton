@@ -14,7 +14,7 @@ Users enter a commitment-based product (loan, credit card, overdraft, BNPL, subs
 
 ## Stack
 - Next.js 16 App Router, React 19, TypeScript, plain CSS (`src/app/globals.css`). No Tailwind.
-- Google Gemini via `@google/genai`, in route handlers only (`src/app/api/*`). Model set in one place: `MODEL` in `src/lib/ai.ts` (`gemini-3.8-flash`, falls back to `gemini-2.5-flash`; override with `GEMINI_MODEL`).
+- Google Gemini via `@google/genai`, in route handlers only (`src/app/api/*`). One model, set in one place: `MODEL` in `src/lib/ai.ts`, from the server-side `GEMINI_MODEL` env var (default `gemini-3.8-flash`). No automatic fallback; every AI response carries an `X-AI-Model` header.
 - Vitest for unit tests. Deployed on Vercel.
 
 ## Map

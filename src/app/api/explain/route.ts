@@ -1,5 +1,5 @@
 import type { Content, GenerateContentResponse } from "@google/genai";
-import { aiConfigured, classify, EXPLAIN_SYSTEM, gemini, requestSignal, thinkingFor, withModel } from "@/lib/ai";
+import { aiConfigured, classify, EXPLAIN_SYSTEM, gemini, MODEL, MODEL_HEADER, requestSignal, thinkingFor } from "@/lib/ai";
 
 interface Turn { role: "user" | "assistant"; content: string }
 
@@ -22,7 +22,7 @@ function parse(body: unknown): { context: string; turns: Turn[] } | null {
   return { context: context.slice(0, MAX_CONTEXT), turns };
 }
 
-const STATUS = { rate_limited: 429, timeout: 504, bad_request: 400, upstream: 502 } as const;
+const STATUS = { rate_limited: 429, timeout: 504, bad_request: 400, model_unavailable: 502, upstream: 502 } as const;
 
 export async function POST(req: Request) {
   if (!aiConfigured()) return Response.json({ error: "not_configured" }, { status: 503 });
@@ -38,14 +38,14 @@ export async function POST(req: Request) {
   const signal = requestSignal(req);
   let stream: AsyncGenerator<GenerateContentResponse>;
   try {
-    stream = await withModel((model) => gemini().models.generateContentStream({
-      model,
+    stream = await gemini().models.generateContentStream({
+      model: MODEL,
       contents,
-      config: { systemInstruction: EXPLAIN_SYSTEM, maxOutputTokens: 2048, temperature: 0.3, thinkingConfig: thinkingFor(model), abortSignal: signal },
-    }));
+      config: { systemInstruction: EXPLAIN_SYSTEM, maxOutputTokens: 2048, temperature: 0.3, thinkingConfig: thinkingFor(MODEL), abortSignal: signal },
+    });
   } catch (err) {
     const code = classify(err, signal);
-    return Response.json({ error: code }, { status: STATUS[code] });
+    return Response.json({ error: code }, { status: STATUS[code], headers: MODEL_HEADER });
   }
 
   const encoder = new TextEncoder();
@@ -76,5 +76,5 @@ export async function POST(req: Request) {
     },
   });
 
-  return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+  return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", ...MODEL_HEADER } });
 }

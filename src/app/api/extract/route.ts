@@ -1,5 +1,5 @@
 import { createPartFromBase64, type Part } from "@google/genai";
-import { aiConfigured, classify, EXTRACT_SYSTEM, gemini, requestSignal, thinkingFor, withModel } from "@/lib/ai";
+import { aiConfigured, classify, EXTRACT_SYSTEM, gemini, MODEL, MODEL_HEADER, requestSignal, thinkingFor } from "@/lib/ai";
 import { forGemini, validateExtraction } from "@/lib/extraction";
 import { PRODUCT_TYPES, PRODUCTS } from "@/lib/finance";
 
@@ -103,17 +103,17 @@ function documentPart(file: FileIn): Part | null {
 }
 
 const BLOCKED = ["SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION"];
-const STATUS = { rate_limited: 429, timeout: 504, bad_request: 400, upstream: 502 } as const;
+const STATUS = { rate_limited: 429, timeout: 504, bad_request: 400, model_unavailable: 502, upstream: 502 } as const;
 const GEMINI_SCHEMA = forGemini(SCHEMA);
 
 export async function POST(req: Request) {
-  if (!aiConfigured()) return Response.json({ error: "not_configured" }, { status: 503 });
+  if (!aiConfigured()) return Response.json({ error: "not_configured" }, { status: 503, headers: MODEL_HEADER });
   const body = (await req.json().catch(() => null)) as { text?: unknown; file?: unknown } | null;
   const text = typeof body?.text === "string" ? body.text.trim().slice(0, MAX_TEXT) : "";
   const fileIn = body?.file as FileIn | undefined;
   const file = fileIn && typeof fileIn.type === "string" && typeof fileIn.data === "string" ? documentPart(fileIn) : null;
-  if (fileIn && !file) return Response.json({ error: "bad_file" }, { status: 400 });
-  if (!text && !file) return Response.json({ error: "bad_request" }, { status: 400 });
+  if (fileIn && !file) return Response.json({ error: "bad_file" }, { status: 400, headers: MODEL_HEADER });
+  if (!text && !file) return Response.json({ error: "bad_request" }, { status: 400, headers: MODEL_HEADER });
 
   const parts: Part[] = [];
   if (file) parts.push(file);
@@ -121,8 +121,8 @@ export async function POST(req: Request) {
 
   const signal = requestSignal(req);
   try {
-    const res = await withModel((model) => gemini().models.generateContent({
-      model,
+    const res = await gemini().models.generateContent({
+      model: MODEL,
       contents: [{ role: "user", parts }],
       config: {
         systemInstruction: EXTRACT_SYSTEM,
@@ -130,21 +130,21 @@ export async function POST(req: Request) {
         responseJsonSchema: GEMINI_SCHEMA,
         temperature: 0,
         maxOutputTokens: 8192,
-        thinkingConfig: thinkingFor(model),
+        thinkingConfig: thinkingFor(MODEL),
         abortSignal: signal,
       },
-    }));
+    });
     const finish = res.candidates?.[0]?.finishReason;
-    if (res.promptFeedback?.blockReason || (finish && BLOCKED.includes(finish))) return Response.json({ error: "refused" }, { status: 422 });
-    if (!res.text) return Response.json({ error: "empty" }, { status: 502 });
+    if (res.promptFeedback?.blockReason || (finish && BLOCKED.includes(finish))) return Response.json({ error: "refused" }, { status: 422, headers: MODEL_HEADER });
+    if (!res.text) return Response.json({ error: "empty" }, { status: 502, headers: MODEL_HEADER });
     // Validate before the UI sees anything: malformed or invented structure is dropped here.
     const clean = validateExtraction(JSON.parse(res.text));
-    if (!clean) return Response.json({ error: "invalid_json" }, { status: 502 });
-    return Response.json(clean);
+    if (!clean) return Response.json({ error: "invalid_json" }, { status: 502, headers: MODEL_HEADER });
+    return Response.json(clean, { headers: MODEL_HEADER });
   } catch (err) {
-    if (err instanceof SyntaxError) return Response.json({ error: "invalid_json" }, { status: 502 });
+    if (err instanceof SyntaxError) return Response.json({ error: "invalid_json" }, { status: 502, headers: MODEL_HEADER });
     const code = classify(err, signal);
-    if (code === "bad_request") return Response.json({ error: file ? "bad_file" : "bad_request" }, { status: 400 });
-    return Response.json({ error: code }, { status: STATUS[code] });
+    if (code === "bad_request") return Response.json({ error: file ? "bad_file" : "bad_request" }, { status: 400, headers: MODEL_HEADER });
+    return Response.json({ error: code }, { status: STATUS[code], headers: MODEL_HEADER });
   }
 }
