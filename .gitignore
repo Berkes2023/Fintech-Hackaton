@@ -46,3 +46,5 @@ CLAUDE.local.md
 
 # keep the example env file
 !.env.example
+
+.vercel
