@@ -9,6 +9,8 @@ export interface Series {
   /** "step" draws payments as they land; "line" joins points (balances). */
   kind?: "step" | "line";
   dash?: string;
+  /** Stroke colour for line series (defaults to slate). */
+  color?: string;
   /** Shade under the line; with `refLine`, the part above it is shaded darker. */
   fill?: boolean;
   /** Leave out of the tooltip. */
@@ -21,6 +23,16 @@ interface Props {
   height?: number;
   label: string;
   endLabels?: boolean;
+  /** Value formatter for the axis and tooltip (defaults to money). */
+  format?: (v: number) => string;
+  /** Label for an x tick, given the x value (defaults to months/years). */
+  xTick?: (t: number) => string;
+  /** Tick spacing on the x axis, in x units. */
+  xStep?: number;
+  /** Tooltip heading for an x value (defaults to "After 2 years"). */
+  tipLabel?: (t: number) => string;
+  /** Include 0 on the y axis even for line-only charts. */
+  yMin?: number;
 }
 
 function niceMax(v: number) {
@@ -35,7 +47,7 @@ const valueAt = (pts: Series["pts"], t: number) => {
   return v;
 };
 
-export function Chart({ series, refLine, height = 280, label, endLabels = true }: Props) {
+export function Chart({ series, refLine, height = 280, label, endLabels = true, format = money, xTick, xStep, tipLabel, yMin = 0 }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(720);
   const [hover, setHover] = useState<number | null>(null);
@@ -51,17 +63,24 @@ export function Chart({ series, refLine, height = 280, label, endLabels = true }
 
   const H = height, L = 64, R = 20, T = 18, B = 36;
   const tMax = Math.max(1, ...series.map((s) => (s.pts.length ? s.pts[s.pts.length - 1].t : 1)));
-  const yMax = niceMax(Math.max(refLine?.y ?? 0, ...series.flatMap((s) => s.pts.map((p) => p.y))) * 1.06);
+  // Round tick spacing (1, 2, 2.5, 5 × 10ⁿ) so axis labels read as whole numbers.
+  const values = series.flatMap((s) => s.pts.map((p) => p.y));
+  const dataLo = Math.min(yMin, ...values);
+  const dataHi = Math.max(refLine?.y ?? 0, ...values) * 1.04;
+  const yStep = niceMax((dataHi - dataLo) / 5 || 1);
+  const yLo = Math.floor(dataLo / yStep) * yStep;
+  const yMax = Math.max(yLo + yStep, Math.ceil(dataHi / yStep) * yStep);
   const x = (t: number) => L + ((W - L - R) * t) / tMax;
-  const y = (v: number) => T + (H - T - B) * (1 - v / yMax);
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * yMax);
-  const step = tMax <= 6 ? 1 : tMax <= 24 ? 3 : tMax <= 60 ? 12 : tMax <= 180 ? 24 : 60;
+  const y = (v: number) => T + (H - T - B) * (1 - (v - yLo) / (yMax - yLo));
+  const yTicks: number[] = [];
+  for (let v = yLo; v <= yMax + yStep / 1e6; v += yStep) yTicks.push(Math.abs(v) < yStep / 1e6 ? 0 : v);
+  const step = xStep ?? (tMax <= 6 ? 1 : tMax <= 24 ? 3 : tMax <= 60 ? 12 : tMax <= 180 ? 24 : 60);
   const xTicks: number[] = [];
   for (let t = 0; t <= tMax + 1e-9; t += step) xTicks.push(t);
-  const xLabel = (t: number) => (step >= 12 ? `${t / 12}y` : `${t}m`);
+  const xLabel = xTick ?? ((t: number) => (step >= 12 ? `${t / 12}y` : `${t}m`));
 
   const stepPath = (pts: Series["pts"]) => {
-    let d = `M${x(0)},${y(0)}`, prev = 0;
+    let d = `M${x(0)},${y(yLo)}`, prev = yLo;
     for (const p of pts) { d += ` L${x(p.t)},${y(prev)} L${x(p.t)},${y(p.y)}`; prev = p.y; }
     return d;
   };
@@ -78,7 +97,7 @@ export function Chart({ series, refLine, height = 280, label, endLabels = true }
         {yTicks.map((v) => (
           <g key={v}>
             <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="#ececee" />
-            <text x={L - 10} y={y(v) + 4} textAnchor="end" fontSize="12" fill="#717173">{money(v)}</text>
+            <text x={L - 10} y={y(v) + 4} textAnchor="end" fontSize="12" fill="#717173">{format(v)}</text>
           </g>
         ))}
         {xTicks.map((t) => <text key={t} x={x(t)} y={H - 12} textAnchor="middle" fontSize="12" fill="#717173">{xLabel(t)}</text>)}
@@ -88,7 +107,7 @@ export function Chart({ series, refLine, height = 280, label, endLabels = true }
           const last = s.pts[s.pts.length - 1];
           if (s.kind === "line") {
             const d = s.pts.map((p, j) => `${j ? "L" : "M"}${x(p.t)},${y(p.y)}`).join(" ");
-            return <path key={s.name} d={d} fill="none" stroke="#717173" strokeWidth="1.75" strokeDasharray={s.dash} />;
+            return <path key={s.name} d={d} fill="none" stroke={s.color ?? "#717173"} strokeWidth="2" strokeDasharray={s.dash} />;
           }
           const d = stepPath(s.pts);
           const area = `${d} L${x(last.t)},${y(0)} Z`;
@@ -122,8 +141,8 @@ export function Chart({ series, refLine, height = 280, label, endLabels = true }
       </svg>
       {hover !== null && (
         <div className="chart-tip" style={{ left: `${(x(hover) / W) * 100}%`, top: T }}>
-          <b>{hover === 0 ? "At the start" : `After ${dur(hover)}`}</b>
-          {series.filter((s) => !s.quiet).map((s) => <div key={s.name}>{s.name}: {money(valueAt(s.pts, hover))}</div>)}
+          <b>{tipLabel ? tipLabel(hover) : hover === 0 ? "At the start" : `After ${dur(hover)}`}</b>
+          {series.filter((s) => !s.quiet).map((s) => <div key={s.name}>{s.name}: {format(valueAt(s.pts, hover))}</div>)}
         </div>
       )}
     </div>

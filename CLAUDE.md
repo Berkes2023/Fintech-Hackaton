@@ -24,6 +24,9 @@ Users enter a commitment-based product (loan, credit card, overdraft, BNPL, subs
 - `src/lib/ai.ts`: server-only Anthropic client and system prompts.
 - `src/components/Header.tsx`: mega menu, driven by `src/lib/nav.ts`.
 - `src/components/Checker.tsx`: the cost checker. `ComparePanel.tsx`: comparison table and chart.
+- `src/components/HeroCard.tsx`: home page example card that rises as you scroll (sets `--p` from 0 to 1).
+- `src/lib/rates.ts`: live Bank of England / Fed / ECB rates for `/rates`, cached for a day. UK uses BoE series IUDBEDR because FRED's BOERUKM stopped in 2017.
+- `analysis/rates_vs_assets.py`: pandas script correlating asset moves with rate changes (same sources).
 
 ## Commands
 - `npm run dev`: local dev server on http://localhost:3000

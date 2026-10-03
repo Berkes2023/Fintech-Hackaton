@@ -55,6 +55,7 @@ export const NAV: NavGroup[] = [
       { href: "/learn#apr", title: "What APR really means", desc: "Why the headline rate isn’t the whole story", icon: "chart" },
       { href: "/learn#minimum", title: "Minimum payments", desc: "Why they keep you in debt for years", icon: "card" },
       { href: "/learn#bnpl", title: "BNPL explained", desc: "How pay-later plans work in the UK", icon: "bnpl" },
+      { href: "/rates", title: "Interest rates", desc: "Live Bank Rate vs the Fed and ECB", icon: "chart" },
     ],
     feature: {
       href: "/learn#help",

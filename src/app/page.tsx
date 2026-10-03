@@ -1,7 +1,14 @@
 import Link from "next/link";
+import { HeroCard } from "@/components/HeroCard";
 import { Icon } from "@/components/Icon";
-import { money } from "@/lib/format";
-import { EXAMPLES, PRODUCT_TYPES, PRODUCTS, simulate } from "@/lib/finance";
+import { EXAMPLES, PRODUCT_TYPES, PRODUCTS, simulate, type Metrics } from "@/lib/finance";
+
+const toLine = (m: Metrics) => ({
+  total: m.total,
+  interest: m.interest,
+  months: m.end,
+  pts: [{ t: 0, y: 0 }, ...m.s.map((p) => ({ t: p.t, y: p.cum }))],
+});
 
 export default function Home() {
   const card = simulate("card", EXAMPLES[1].values);
@@ -21,24 +28,13 @@ export default function Home() {
             <Link href="/compare" className="btn btn-ghost-photo">Compare options</Link>
           </div>
 
-          <div className="hero-phone" aria-label="Example result">
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <span className="pill-label">Credit card</span>
-              <span className="small muted">£1,200 at 24.9% APR</span>
-            </div>
-            <p className="h3" style={{ marginTop: 16 }}>Paying £50 a month, you pay back {money(card.total)}.</p>
-            <p className="small muted" style={{ marginTop: 6 }}>Paying only the minimum, it takes {Math.round(minOnly.end / 12)} years and costs {money(minOnly.interest)} in interest.</p>
-            <div className="tiles" style={{ marginTop: 16, borderRadius: "16px 16px 0 0", borderBottom: 0 }}>
-              <div className="tile"><span className="caption">Monthly</span><span className="v">£50</span></div>
-              <div className="tile"><span className="caption">Interest</span><span className="v">{money(card.interest)}</span></div>
-              <div className="tile emph"><span className="caption">Total</span><span className="v">{money(card.total)}</span></div>
-              <div className="tile"><span className="caption">Months</span><span className="v">{card.end}</span></div>
-            </div>
+          <div className="hero-stage" aria-label="Example result">
+            <HeroCard fixed={toLine(card)} minOnly={toLine(minOnly)} />
           </div>
         </div>
       </section>
 
-      <section className="container section stack" style={{ gap: 32 }}>
+      <section className="container section after-hero stack" style={{ gap: 32 }}>
         <div className="stack" style={{ maxWidth: 760 }}>
           <h2 className="h1 section-title">Six kinds of commitment. One clear view of each.</h2>
         </div>

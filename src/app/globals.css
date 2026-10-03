@@ -143,7 +143,7 @@ p { margin: 0; }
 
 /* ---------- hero (sky) ---------- */
 .sky {
-  position: relative; overflow: hidden; color: var(--color-bone);
+  position: relative; color: var(--color-bone);
   background:
     radial-gradient(ellipse 34% 16% at 14% 78%, rgba(255,255,255,.95), rgba(255,255,255,0) 70%),
     radial-gradient(ellipse 22% 12% at 26% 70%, rgba(255,255,255,.9), rgba(255,255,255,0) 70%),
@@ -155,9 +155,29 @@ p { margin: 0; }
 }
 .hero { padding-block: 96px 0; text-align: center; display: grid; justify-items: center; gap: 24px; }
 .hero .lead { color: rgba(255, 255, 255, .92); }
-.hero-phone { margin-top: 32px; width: min(560px, 100%); background: var(--color-bone); color: var(--color-ink); border-radius: var(--radius-card) var(--radius-card) 0 0; padding: 28px 28px 0; text-align: left; border: 1px solid rgba(255,255,255,.6); border-bottom: 0; }
-.hero-phone .tile { padding: 16px; min-width: 0; }
-.hero-phone .tile .v { font-size: clamp(20px, 2.2vw, 26px); }
+/* Hero card: floats over the sky/white boundary and rises as you scroll (--p goes 0 → 1). */
+.hero-stage { position: relative; margin-top: 40px; margin-bottom: -320px; z-index: 2; width: 100%; display: grid; justify-items: center; }
+.hero-card {
+  --p: 0;
+  width: min(600px, 100%); background: var(--color-bone); color: var(--color-ink); text-align: left;
+  border-radius: var(--radius-card); border: 1px solid var(--color-ash-grey); padding: 28px;
+  display: grid; gap: 20px;
+  transform: translateY(calc((1 - var(--p)) * 90px)) scale(calc(0.9 + var(--p) * 0.1));
+  transform-origin: 50% 0;
+  box-shadow: 0 30px 60px rgba(31, 31, 31, calc(0.06 + var(--p) * 0.06)); /* lifted, popover-style */
+  will-change: transform;
+}
+.hero-card-row { transform: translateY(calc((1 - var(--p)) * var(--lag, 0px))); }
+.hero-card .hero-card-row:nth-child(3) { --lag: 12px; }
+.hero-card .hero-card-row:nth-child(4) { --lag: 28px; }
+.hero-card .hero-card-row:nth-child(5) { --lag: 44px; }
+.hero-card .hero-card-row:nth-child(6) { --lag: 60px; }
+.hero-card .tile { padding: 16px; min-width: 0; }
+.hero-card .tile .v { font-size: clamp(20px, 2.2vw, 26px); }
+.hero-mini svg { display: block; width: 100%; height: auto; margin-top: 8px; }
+.hero-mini .legend { gap: 12px; font-size: 12px; }
+.after-hero { padding-top: calc(var(--section-gap) + 320px); }
+@media (prefers-reduced-motion: reduce) { .hero-card { --p: 1 !important; } }
 .pill-label { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: var(--radius-pill); background: var(--color-mist); font-size: 12px; font-weight: 600; letter-spacing: .015em; text-transform: uppercase; }
 
 /* ---------- surfaces ---------- */
