@@ -8,10 +8,14 @@ const MAX_FILE_B64 = 4_000_000;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
 type ImageType = (typeof IMAGE_TYPES)[number];
 
+const CONDITION_KINDS = ["variable_rate", "late_fee", "promo_ends", "auto_renewal", "early_repayment_charge", "price_rise", "exit_fee", "credit_check", "other"];
+const str = (description: string) => ({ type: "string", description });
+
+// Every field is required (structured outputs need that); "not stated" is an empty string.
 const SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["product", "values", "missing", "unusual"],
+  required: ["product", "values", "conditions", "claim", "stated", "document_text"],
   properties: {
     product: { type: "string", enum: PRODUCT_TYPES },
     values: {
@@ -20,25 +24,43 @@ const SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "value", "quote"],
+        required: ["id", "value", "quote", "confidence"],
         properties: {
           id: { type: "string" },
-          value: { type: "string", description: "A plain number (no £ or %), or an option value for select fields." },
-          quote: { type: "string", description: "The exact words from the document this value comes from, copied verbatim, under 160 characters." },
+          value: str("A plain number (no £ or %), or an option value for select fields."),
+          quote: str("The exact words from the document this value comes from, copied verbatim, under 160 characters."),
+          confidence: { type: "string", enum: ["high", "medium", "low"], description: "high = stated outright; medium = worked out from clear wording; low = ambiguous." },
         },
       },
     },
-    missing: { type: "array", items: { type: "string" }, description: "Field ids that matter for the total cost but are not stated." },
-    unusual: {
+    conditions: {
       type: "array",
-      description: "Up to 3 terms worth checking (variable rates, early repayment charges, penalties), each with its exact source words.",
+      description: "Every condition that could cost money or limit flexibility: variable rates, fees, promotional periods ending, automatic renewal, early repayment charges, price rises, credit checks.",
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["note", "quote"],
-        properties: { note: { type: "string" }, quote: { type: "string" } },
+        required: ["kind", "title", "plain", "quote"],
+        properties: {
+          kind: { type: "string", enum: CONDITION_KINDS },
+          title: str("A short heading, e.g. 'Variable rate'."),
+          plain: str("One plain-English sentence on what it means for the person. Explain, never advise."),
+          quote: str("The exact words from the document, verbatim, under 200 characters."),
+        },
       },
     },
+    claim: str("The most prominent marketing claim, verbatim (e.g. 'ONLY £99 A MONTH!'), or empty if there is none."),
+    stated: {
+      type: "object",
+      additionalProperties: false,
+      required: ["monthly", "monthly_quote", "total", "total_quote"],
+      properties: {
+        monthly: str("The monthly or regular payment the document states, as a plain number, or empty."),
+        monthly_quote: str("Its exact words, or empty."),
+        total: str("The total amount payable the document states, as a plain number, or empty."),
+        total_quote: str("Its exact words, or empty."),
+      },
+    },
+    document_text: str("For an attached file only: a faithful transcription of the document text, up to 3,000 characters. Empty when the text was pasted."),
   },
 };
 
@@ -46,7 +68,7 @@ const fieldSpec = PRODUCT_TYPES.map((t) =>
   `${t}: ${PRODUCTS[t].fields.map((f) => `${f.id}${f.options ? ` (${f.options.map((o) => o[0]).join("|")})` : ""} = ${f.label}`).join("; ")}`,
 ).join("\n");
 
-const INSTRUCTIONS = `Products and their field ids:\n${fieldSpec}\n\nTreat a BNPL or "pay monthly" plan with fixed instalments as bnpl, and other fixed-term finance as loan. Only include a value if the document states it; give the exact source words for each. List required-but-absent fields in "missing" rather than guessing.`;
+const INSTRUCTIONS = `Products and their field ids:\n${fieldSpec}\n\nTreat a BNPL or "pay monthly" plan with fixed instalments as bnpl, and other fixed-term finance as loan. Only include a value if the document states it, with its exact source words and a confidence. Never fill in a value the document leaves out. Copy quotes character for character so they can be found in the text.`;
 
 interface FileIn { type: string; data: string }
 
@@ -73,7 +95,7 @@ export async function POST(req: Request) {
   try {
     const res = await anthropic().beta.messages.create({
       model: MODEL,
-      max_tokens: 4000,
+      max_tokens: 8000,
       betas: [FALLBACK_BETA],
       fallbacks: "default",
       output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },

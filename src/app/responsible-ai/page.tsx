@@ -41,6 +41,9 @@ export default function ResponsibleAIPage() {
           <li>Every value read from a document shows the exact words it came from, so you can check it against the original.</li>
           <li>If a document leaves out something needed for the total cost, like the APR or the length, we say so and label the result an estimate. The AI never fills the gap with a guess.</li>
           <li>Ask “where does it say that?” and the AI quotes the document word for word, or tells you it isn’t there.</li>
+          <li><b>Privacy shield:</b> names, addresses, account numbers, sort codes, phone numbers and emails are removed in your browser before pasted text is sent to the AI. They aren’t needed to work out a cost.</li>
+          <li><b>Traceable:</b> every extracted value carries a confidence level, and “Show me where” highlights the sentence it came from.</li>
+          <li><b>Double-checked:</b> if the document states its own monthly payment or total, we compare it with our calculation and tell you whether they match.</li>
           <li>If you mention money worries, it points you to free help from MoneyHelper and StepChange.</li>
           <li>Pasted text is treated as data, never as instructions to the AI.</li>
         </ul>

@@ -73,6 +73,7 @@ export const NAV: NavGroup[] = [
       { href: "/responsible-ai", title: "Responsible AI", desc: "Where we use AI, and the rules it follows", icon: "shield" },
       { href: "/responsible-ai#maths", title: "How we calculate", desc: "The maths behind every number", icon: "calc" },
       { href: "/responsible-ai#limits", title: "What we don’t do", desc: "No advice, no bank access, no data kept", icon: "help" },
+      { href: "/developers", title: "Developer API", desc: "Money Labels for any website", icon: "code" },
     ],
     feature: {
       href: "/responsible-ai",

@@ -26,6 +26,9 @@ Users enter a commitment-based product (loan, credit card, overdraft, BNPL, subs
 - `src/components/Checker.tsx`: the cost checker. `ComparePanel.tsx`: comparison table and chart.
 - `src/components/HeroCard.tsx`: home page example card that rises as you scroll (sets `--p` from 0 to 1).
 - `src/lib/rates.ts`: live Bank of England / Fed / ECB rates for `/rates`, cached for a day. UK uses BoE series IUDBEDR because FRED's BOERUKM stopped in 2017.
+- `src/lib/finance.ts` also holds `twin()`/`scenarios()` (digital twin), `stressTest()`, `levers()` (what changes the total) and `crossCheck()` (document figures vs ours).
+- `src/lib/privacy.ts`: redacts personal details in the browser before text goes to AI. `src/lib/highlight.ts`: finds quotes for "Show me where".
+- `src/lib/api.ts` + `src/app/api/v1/label`: public, AI-free Money Label API (documented at `/developers`).
 - `analysis/rates_vs_assets.py`: pandas script correlating asset moves with rate changes (same sources).
 
 ## Commands

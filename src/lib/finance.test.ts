@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { money } from "./format";
-import { defaults, EXAMPLES, moneyLabel, risks, simulate, understandingCheck } from "./finance";
+import { crossCheck, defaults, EXAMPLES, levers, moneyLabel, risks, scenarios, simulate, stressTest, twin, understandingCheck } from "./finance";
 
 const close = (a: number, b: number, tol = 0.02) => expect(Math.abs(a - b)).toBeLessThanOrEqual(tol);
 
@@ -131,6 +131,61 @@ describe("money label and understanding check", () => {
   it("asks about late fees when a plan is interest-free", () => {
     const m = simulate("bnpl", EXAMPLES[0].values);
     expect(understandingCheck("bnpl", EXAMPLES[0].values, m)?.question).toMatch(/on top/);
+  });
+});
+
+describe("digital twin", () => {
+  const loan = { amount: 5000, apr: 12.9, term: 36, fee: 0, lateFee: 12 };
+  const card = EXAMPLES[1].values;
+
+  it("with no events, matches the main simulator for every balance product", () => {
+    close(twin("loan", loan).total, simulate("loan", loan).total, 0.05);
+    close(twin("card", card).total, simulate("card", card).total, 0.05);
+    const od = defaults("overdraft");
+    close(twin("overdraft", od).total, simulate("overdraft", od).total, 0.05);
+  });
+
+  it("a missed payment costs the late fee plus extra interest, and finishes later", () => {
+    const base = twin("loan", loan), miss = twin("loan", loan, { missed: [3] });
+    expect(miss.total).toBeGreaterThan(base.total + 12);
+    expect(miss.end).toBeGreaterThan(base.end);
+  });
+
+  it("a rate rise on a loan raises the cost but keeps the end date", () => {
+    const base = twin("loan", loan), rise = twin("loan", loan, { rateRise: { from: 13, by: 3 } });
+    expect(rise.total).toBeGreaterThan(base.total);
+    expect(rise.end).toBe(base.end);
+  });
+
+  it("offers five scenarios for balance products and none for bills", () => {
+    expect(scenarios("loan", loan).map((s) => s.id)).toEqual(["normal", "missed", "break", "rate", "extra"]);
+    expect(scenarios("subscription", defaults("subscription"))).toEqual([]);
+  });
+});
+
+describe("stress test, levers and cross-check", () => {
+  it("works out what's left each month", () => {
+    const rows = stressTest({ income: 2000, essentials: 1250, existing: 300, payment: 220 });
+    expect(rows.map((r) => Math.round(r.left))).toEqual([450, 230, 105, 30, -95]);
+  });
+
+  it("each lever moves the total the right way", () => {
+    const ls = levers("loan", { amount: 5000, apr: 12.9, term: 36, fee: 0 });
+    expect(ls.find((l) => l.label.startsWith("APR"))!.delta).toBeLessThan(0);
+    expect(ls.find((l) => l.label === "12 months shorter")!.delta).toBeLessThan(0);
+    expect(ls.find((l) => l.label === "12 months longer")!.delta).toBeGreaterThan(0);
+  });
+
+  it("agrees with a real key facts sheet within a pound", () => {
+    // £899 over 12 months at 29.9% APR: the provider states £86.73 a month, £1,040.76 in total.
+    const m = simulate("loan", { amount: 899, apr: 29.9, term: 12, fee: 0 });
+    const checks = crossCheck(m, { monthly: 86.73, total: 1040.76 });
+    expect(checks.every((c) => c.matches)).toBe(true);
+  });
+
+  it("flags a stated total that doesn't add up", () => {
+    const m = simulate("loan", { amount: 899, apr: 29.9, term: 12, fee: 0 });
+    expect(crossCheck(m, { total: 950 })[0].matches).toBe(false);
   });
 });
 

@@ -544,3 +544,140 @@ export const REQUIRED: Record<ProductType, string[]> = {
 export function fieldLabel(type: ProductType, id: string): string {
   return PRODUCTS[type].fields.find((f) => f.id === id)?.label ?? id;
 }
+
+/* ---------- digital twin: life events over the course of a commitment ---------- */
+
+export interface TwinEvents {
+  /** Months (1-based) in which the payment is missed: no payment, plus a late fee. */
+  missed?: number[];
+  /** Inclusive month range with no payments and no fee, e.g. a drop in income. */
+  holiday?: [number, number];
+  /** The rate goes up by `by` percentage points from month `from` (variable rates). */
+  rateRise?: { from: number; by: number };
+  /** Overpayment added to each payment. */
+  extra?: number;
+}
+export interface TwinPoint { t: number; bal: number; paid: number; interest: number }
+export interface TwinResult { pts: TwinPoint[]; total: number; interest: number; fees: number; end: number; never: boolean; left: number }
+
+/** Products with a balance that events can push around. */
+export const hasTwin = canOverpay;
+
+/** Replays a loan, card or overdraft month by month under the given life events. */
+export function twin(type: ProductType, v: Values, ev: TwinEvents = {}): TwinResult {
+  const loan = type === "loan", card = type === "card";
+  let bal = n(card ? v.balance : v.amount);
+  const baseRate = n(type === "overdraft" ? v.ear : v.apr);
+  const cap = loan ? 600 : card ? CARD_CAP_MONTHS : OVERDRAFT_CAP_MONTHS;
+  const term = Math.max(1, Math.round(n(v.term) || 1));
+  const missed = new Set(ev.missed ?? []);
+  let r = monthlyRate(baseRate);
+  let loanPay = loan ? annuity(bal, r, term) : 0;
+  let paid = 0, interest = 0, fees = 0, i = 0;
+  if (loan && n(v.fee)) { paid += n(v.fee); fees += n(v.fee); }
+  const pts: TwinPoint[] = [{ t: 0, bal, paid, interest: 0 }];
+
+  while (bal > 0.005 && i < cap) {
+    i++;
+    if (ev.rateRise && i === ev.rateRise.from) {
+      r = monthlyRate(baseRate + ev.rateRise.by);
+      // A variable-rate loan is usually re-set so it still ends on time.
+      if (loan) loanPay = annuity(bal, r, Math.max(1, term - i + 1));
+    }
+    const pre = bal;
+    let int: number, fee = 0, annual = 0;
+    if (card) { int = i <= n(v.intro) ? 0 : bal * r; annual = fee = n(v.annualFee) > 0 && (i - 1) % 12 === 0 ? n(v.annualFee) : 0; }
+    else if (loan) int = bal * r;
+    else { int = Math.max(0, bal - n(v.buffer)) * r; fee = n(v.monthlyFee); }
+    if (missed.has(i) && type !== "overdraft") fee += n(v.lateFee);
+    bal += int + fee;
+    interest += int;
+    fees += fee;
+
+    const skip = missed.has(i) || (!!ev.holiday && i >= ev.holiday[0] && i <= ev.holiday[1]);
+    let pay = 0;
+    if (!skip) {
+      pay = loan ? loanPay : card ? (v.payType === "min" ? Math.max(25, pre * 0.01 + int + annual) : n(v.fixedPay)) : n(v.repay);
+      pay = Math.min(pay + (ev.extra ?? 0), bal);
+    }
+    bal -= pay;
+    paid += pay;
+    pts.push({ t: i, bal: Math.max(0, bal), paid, interest });
+  }
+  return { pts, total: paid, interest, fees, end: i, never: bal > 0.005, left: bal };
+}
+
+export interface Scenario { id: string; label: string; detail: string; res: TwinResult }
+
+/** The standard set of “what could happen” stories for the digital twin. */
+export function scenarios(type: ProductType, v: Values): Scenario[] {
+  if (!hasTwin(type)) return [];
+  const rateName = type === "overdraft" ? "EAR" : "APR";
+  const list: Omit<Scenario, "res">[] = [
+    { id: "normal", label: "Every payment on time", detail: "The plan as it stands." },
+    { id: "missed", label: "Miss one payment", detail: type === "overdraft" ? "No repayment in month 3." : "Month 3 is missed: no payment, plus a late fee." },
+    { id: "break", label: "Income drops for 3 months", detail: "No payments in months 6 to 8. Interest keeps building." },
+    { id: "rate", label: `${rateName} rises 3 points`, detail: "From month 13, if the rate is variable." },
+    { id: "extra", label: "Pay £50 extra a month", detail: "From the first month." },
+  ];
+  const events: Record<string, TwinEvents> = {
+    normal: {}, missed: { missed: [3] }, break: { holiday: [6, 8] }, rate: { rateRise: { from: 13, by: 3 } }, extra: { extra: 50 },
+  };
+  return list.map((s) => ({ ...s, res: twin(type, v, events[s.id]) }));
+}
+
+/* ---------- stress test ---------- */
+
+export interface StressInput { income: number; essentials: number; existing: number; payment: number }
+export interface StressRow { label: string; left: number }
+
+/** What's left each month today, with the new payment, and if things get tighter. */
+export function stressTest({ income, essentials, existing, payment }: StressInput): StressRow[] {
+  return [
+    { label: "Left each month today", left: income - essentials - existing },
+    { label: "With this new payment", left: income - essentials - existing - payment },
+    { label: "…and if essentials cost 10% more", left: income - essentials * 1.1 - existing - payment },
+    { label: "…or if income falls 10%", left: income * 0.9 - essentials - existing - payment },
+    { label: "…or both at once", left: income * 0.9 - essentials * 1.1 - existing - payment },
+  ];
+}
+
+/* ---------- counterfactuals: what would change the total ---------- */
+
+export interface Lever { label: string; total: number; delta: number; never: boolean }
+
+/** Small, concrete changes and how each one moves the total you pay. */
+export function levers(type: ProductType, v: Values): Lever[] {
+  const base = simulate(type, v);
+  if (!PRODUCTS[type].credit || base.never) return [];
+  const out: Lever[] = [];
+  const add = (label: string, next: Values, extra = 0) => {
+    const m = simulate(type, next, extra);
+    out.push({ label, total: m.total, delta: m.total - base.total, never: m.never });
+  };
+  const rateKey = type === "overdraft" ? "ear" : "apr";
+  if (n(v[rateKey]) > 0) add(`${type === "overdraft" ? "EAR" : "APR"} 2 points lower`, { ...v, [rateKey]: Math.max(0, n(v[rateKey]) - 2) });
+  if (type === "loan") {
+    if (n(v.term) > 12) add("12 months shorter", { ...v, term: n(v.term) - 12 });
+    add("12 months longer", { ...v, term: n(v.term) + 12 });
+    if (n(v.fee) > 0) add("No arrangement fee", { ...v, fee: 0 });
+  }
+  if (type === "card" || type === "overdraft") add("Pay £25 more a month", v, 25);
+  if (type === "card" && n(v.intro) === 0) add("A 12-month 0% offer", { ...v, intro: 12 });
+  if (type === "bnpl" && n(v.apr) > 0) add("Interest-free (0% APR)", { ...v, apr: 0 });
+  if (type === "bnpl" && n(v.missed) > 0) add("No missed payments", { ...v, missed: 0 });
+  return out;
+}
+
+/* ---------- cross-check: does the document's own maths agree with ours? ---------- */
+
+export interface CrossCheck { label: string; stated: number; ours: number; matches: boolean }
+
+/** Compares figures the provider states with the engine's. Within £1 or 1% counts as a match. */
+export function crossCheck(m: Metrics, stated: { monthly?: number; total?: number }): CrossCheck[] {
+  const out: CrossCheck[] = [];
+  const near = (a: number, b: number) => Math.abs(a - b) <= Math.max(1, Math.abs(b) * 0.01);
+  if (stated.monthly && stated.monthly > 0) out.push({ label: "Monthly payment", stated: stated.monthly, ours: m.regular, matches: near(m.regular, stated.monthly) });
+  if (stated.total && stated.total > 0 && !m.never) out.push({ label: "Total amount payable", stated: stated.total, ours: m.total, matches: near(m.total, stated.total) });
+  return out;
+}

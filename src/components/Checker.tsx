@@ -8,15 +8,24 @@ import {
   defaults, explain, fieldLabel, GLOSSARY, isProductType, moneyLabel, monthlyEquivalent, PRODUCT_TYPES, PRODUCTS,
   risks, RISK_LABEL, simulate, suggestName, understandingCheck, visibleFields, type ProductType,
 } from "@/lib/finance";
+import type { Mark } from "@/lib/highlight";
 import { draftStore, MAX_SAVED, newOptionId, savedStore, type Draft } from "@/lib/store";
 import { AskPanel } from "./AskPanel";
 import { Chart, type Series } from "./Chart";
+import { ClaimReality } from "./ClaimReality";
 import { CommitCheck } from "./CommitCheck";
+import { CostScanner } from "./CostScanner";
+import { DigitalTwin } from "./DigitalTwin";
+import { DocumentPanel } from "./DocumentPanel";
 import { MoneyLabelCard } from "./MoneyLabelCard";
 import { PasteFill, type FillResult } from "./PasteFill";
+import { StressTest, type Budget } from "./StressTest";
 import { WhatIf } from "./WhatIf";
+import { WhyNumber } from "./WhyNumber";
 
 type Extracted = Omit<FillResult, "type" | "values">;
+
+const CONFIDENCE = { high: "High confidence", medium: "Medium confidence", low: "Low confidence: check this" } as const;
 
 function Rich({ text }: { text: string }) {
   return <>{text.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 ? <strong key={i}>{part}</strong> : part))}</>;
@@ -35,8 +44,9 @@ export function Checker() {
 
   // What AI read from a document: which fields it filled, the words behind each, and what was missing.
   const [extracted, setExtracted] = useState<Extracted | null>(null);
+  const [active, setActive] = useState<string | null>(null);
   const [detailed, setDetailed] = useState(true);
-  const [spare, setSpare] = useState("");
+  const [budget, setBudget] = useState<Budget>({ income: "", essentials: "", existing: "" });
   const [saveName, setSaveName] = useState("");
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const saved = savedStore.use();
@@ -47,7 +57,8 @@ export function Checker() {
     draftStore.set(next);
     if (next.type !== urlType) window.history.replaceState(null, "", `?type=${next.type}`);
   };
-  const pickType = (t: ProductType) => { if (t !== type) { setExtracted(null); commit({ type: t, values: defaults(t), example: false }); } };
+  const clearDoc = () => { setExtracted(null); setActive(null); };
+  const pickType = (t: ProductType) => { if (t !== type) { clearDoc(); commit({ type: t, values: defaults(t), example: false }); } };
   const setField = (id: string, value: number | string) => {
     // Once someone types a value it's theirs: drop the AI highlight, quote and "missing" flag for that field.
     setExtracted((x) => x && {
@@ -58,15 +69,32 @@ export function Checker() {
     });
     commit({ type, values: { ...v, [id]: value }, example: false });
   };
+  const show = (key: string) => {
+    // Re-selecting the same quote should still scroll to it, so clear first.
+    setActive(null);
+    requestAnimationFrame(() => setActive(key));
+  };
 
   const m = simulate(type, v);
-  const spareNum = Number(spare) || 0;
-  const riskList = risks(type, v, m, spareNum);
+  const income = Number(budget.income) || 0;
+  const spare = income > 0 ? income - (Number(budget.essentials) || 0) - (Number(budget.existing) || 0) : 0;
+  const riskList = risks(type, v, m, spare);
   const label = moneyLabel(type, v, m);
   const shownRisks = detailed ? riskList : riskList.filter((r) => r.lvl !== "info");
   const paragraphs = explain(type, v, m);
   const fortnightly = type === "bnpl" && v.interval === "fortnight";
   const perLabel = fortnightly ? "every two weeks" : "a month";
+  const missingLabels = missing.map((id) => fieldLabel(type, id));
+
+  const marks: Mark[] = extracted
+    ? [
+        ...Object.entries(extracted.evidence).map(([id, e]) => ({ key: `f-${id}`, quote: e.quote })),
+        ...extracted.conditions.map((c, i) => ({ key: `cond-${i}`, quote: c.quote })),
+        ...(extracted.claim ? [{ key: "claim", quote: extracted.claim }] : []),
+        ...(extracted.stated.monthlyQuote ? [{ key: "stated-monthly", quote: extracted.stated.monthlyQuote }] : []),
+        ...(extracted.stated.totalQuote ? [{ key: "stated-total", quote: extracted.stated.totalQuote }] : []),
+      ].filter((x) => x.quote)
+    : [];
 
   // Headline
   let headline: React.ReactNode, sub: string;
@@ -114,11 +142,12 @@ export function Checker() {
       `WARNINGS SHOWN: ${riskList.map((r) => r.title).join("; ")}`,
     ];
     if (extracted) {
-      const quotes = Object.entries(extracted.evidence).map(([id, q]) => `${fieldLabel(type, id)}: "${q}"`);
+      const quotes = Object.entries(extracted.evidence).map(([id, e]) => `${fieldLabel(type, id)}: "${e.quote}"`);
       lines.push(`QUOTES FROM THE PROVIDER'S DOCUMENT (field: exact words):\n${quotes.join("\n") || "none"}`);
-      for (const u of extracted.unusual) lines.push(`Term worth checking: ${u.note} ("${u.quote}")`);
-      if (missing.length) lines.push(`NOT STATED IN THE DOCUMENT (standard values used instead): ${missing.map((id) => fieldLabel(type, id)).join(", ")}`);
-      if (extracted.source.length > 40) lines.push(`DOCUMENT TEXT (excerpt):\n${extracted.source.slice(0, 2500)}`);
+      for (const c of extracted.conditions) lines.push(`Condition (${c.title}): "${c.quote}"`);
+      if (extracted.claim) lines.push(`Advert headline: "${extracted.claim}"`);
+      if (missing.length) lines.push(`NOT STATED IN THE DOCUMENT (standard values used instead): ${missingLabels.join(", ")}`);
+      if (extracted.source.length > 40) lines.push(`DOCUMENT TEXT (excerpt, personal details removed):\n${extracted.source.slice(0, 2500)}`);
     } else {
       lines.push("No document was provided: the figures were typed in by the person.");
     }
@@ -132,12 +161,23 @@ export function Checker() {
     setSaveMsg("Added. See it on the Compare page.");
   };
 
+  const onFill = (r: FillResult) => {
+    const { type: t, values, ...rest } = r;
+    setExtracted(rest);
+    setActive(null);
+    commit({ type: t, values, example: false });
+    // The "aha" moment: jump straight to the decoded result.
+    requestAnimationFrame(() => document.getElementById("results-top")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
   return (
     <div className="container section" style={{ paddingTop: 48 }}>
       <div className="tool">
         <aside className="tool-form" aria-label="Product details">
+          <PasteFill onFill={onFill} />
+
           <div className="stack">
-            <p className="caption">Step 1 · What are you looking at?</p>
+            <p className="caption">Or choose a product and type the details</p>
             <div className="type-pills" role="group" aria-label="Product type">
               {PRODUCT_TYPES.map((t) => (
                 <button key={t} type="button" className="type-pill" aria-pressed={t === type} onClick={() => pickType(t)}>{PRODUCTS[t].label}</button>
@@ -145,12 +185,10 @@ export function Checker() {
             </div>
           </div>
 
-          <PasteFill onFill={(r) => { setExtracted({ filled: r.filled, evidence: r.evidence, missing: r.missing, unusual: r.unusual, source: r.source }); commit({ type: r.type, values: r.values, example: false }); }} />
-
-          <div className="stack">
-            <p className="caption">Step 2 · Check the details</p>
-            <div className="fields">
-              {visibleFields(type, v).map((f) => (
+          <div className="fields">
+            {visibleFields(type, v).map((f) => {
+              const ev = extracted?.evidence[f.id];
+              return (
                 <div key={f.id} className={`field${filled.includes(f.id) ? " filled" : ""}${missing.includes(f.id) ? " missing" : ""}`}>
                   <label htmlFor={`f-${f.id}`}>{f.label}</label>
                   <div className="input">
@@ -165,33 +203,32 @@ export function Checker() {
                     )}
                     {f.post && <span>{f.post}</span>}
                   </div>
-                  {extracted?.evidence[f.id] && <p className="quote"><span className="caption">Source</span> “{extracted.evidence[f.id]}”</p>}
+                  {ev && (
+                    <div className="quote">
+                      <div className="row" style={{ justifyContent: "space-between" }}>
+                        <span className={`conf ${ev.confidence}`}>{CONFIDENCE[ev.confidence]}</span>
+                        <button type="button" className="link small" onClick={() => show(`f-${f.id}`)}>Show me where</button>
+                      </div>
+                      “{ev.quote}”
+                    </div>
+                  )}
                   {missing.includes(f.id) && <p className="help"><b>Not in the document.</b> A standard value is shown: ask the provider for the real one.</p>}
                   {detailed && f.help && <p className="help">{f.help}</p>}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="stack anchor-target" id="afford">
-            <p className="caption">Step 3 · Can it fit your month? (optional)</p>
-            <div className="field">
-              <label htmlFor="spare">Money left after bills each month</label>
-              <div className="input"><span>£</span><input id="spare" type="number" min={0} step={10} inputMode="decimal" placeholder="e.g. 250" value={spare} onChange={(e) => setSpare(e.target.value)} /></div>
-              {detailed && <p className="help">Only used on this page to compare against the payment. It isn’t saved or sent anywhere.</p>}
-            </div>
+              );
+            })}
           </div>
         </aside>
 
         <div className="results" aria-live="polite">
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <span className="pill-label">{draft.example ? "Example: paying for a £1,200 laptop" : `${product.label} · your figures`}</span>
+          <div className="row anchor-target" id="results-top" style={{ justifyContent: "space-between" }}>
+            <span className="pill-label">{draft.example ? "Example: paying for a £1,200 laptop" : extracted ? `${product.label} · decoded from your document` : `${product.label} · your figures`}</span>
             <div className="row">
               <div className="segmented" role="group" aria-label="How much detail">
                 <button type="button" aria-pressed={!detailed} onClick={() => setDetailed(false)}>Simple</button>
                 <button type="button" aria-pressed={detailed} onClick={() => setDetailed(true)}>Detailed</button>
               </div>
-              <button type="button" className="link small" onClick={() => { setExtracted(null); commit({ type, values: defaults(type), example: false }); }}>Reset</button>
+              <button type="button" className="link small" onClick={() => { clearDoc(); commit({ type, values: defaults(type), example: false }); }}>Reset</button>
             </div>
           </div>
 
@@ -199,7 +236,7 @@ export function Checker() {
             <div className="missing-banner" role="alert">
               <b>We can’t work out the real cost from this document alone.</b>
               <p className="small">
-                It doesn’t say: {missing.map((id) => fieldLabel(type, id)).join(", ")}. The figures below use standard values so you can explore, but they’re only an estimate. Ask the provider for these before you commit.
+                It doesn’t say: {missingLabels.join(", ")}. The figures below use standard values so you can explore, but they’re only an estimate. Ask the provider for these before you commit.
               </p>
             </div>
           )}
@@ -217,21 +254,22 @@ export function Checker() {
             ))}
           </div>
 
+          {extracted && (
+            <ClaimReality claim={extracted.claim} m={m} credit={product.credit} missing={missingLabels} stated={extracted.stated} onShow={show} />
+          )}
+
+          {extracted && (extracted.conditions.length > 0 || extracted.source) && (
+            <div className="grid-2 doc-row">
+              <CostScanner conditions={extracted.conditions} onShow={show} />
+              <DocumentPanel source={extracted.source} marks={marks} active={active} redactions={extracted.redactions} />
+            </div>
+          )}
+
           <div className="label-row">
-            <MoneyLabelCard label={label} product={product.label} estimate={missing.map((id) => fieldLabel(type, id))} />
+            <MoneyLabelCard label={label} product={product.label} estimate={missingLabels} />
             <div className="stack">
               <CommitCheck key={type} type={type} m={m} risks={riskList} check={understandingCheck(type, v, m)} perLabel={perLabel} onSave={save} />
-              {extracted && extracted.unusual.length > 0 && (
-                <section className="card stack" aria-labelledby="terms-title">
-                  <h2 id="terms-title" className="h3">Terms worth a second look</h2>
-                  <ul className="risks">
-                    {extracted.unusual.map((u) => (
-                      <li key={u.note} className="risk"><b>{u.note}</b><p className="quote">“{u.quote}”</p></li>
-                    ))}
-                  </ul>
-                  <p className="small muted">Picked out by AI from your document, with the exact words. Check them in the original.</p>
-                </section>
-              )}
+              {detailed && <WhyNumber type={type} v={v} m={m} />}
             </div>
           </div>
 
@@ -247,7 +285,9 @@ export function Checker() {
             <Chart series={series} refLine={{ y: product.credit ? m.principal : m.headlineTotal, label: product.credit ? "Borrowed" : "Advertised price" }} label="Total amount paid over time" />
           </section>
 
+          <DigitalTwin key={`twin-${type}`} type={type} v={v} />
           <WhatIf key={`${type}-${String(v.payType)}`} type={type} v={v} base={m} onApply={setField} />
+          <StressTest budget={budget} onChange={setBudget} payment={monthlyEquivalent(type, v, m)} perLabel={perLabel} />
 
           <div className="grid-2">
             <section className="card plain" aria-labelledby="plain-title">
@@ -271,11 +311,6 @@ export function Checker() {
                 ))}
                 {shownRisks.length === 0 && <li className="risk"><p>Nothing stands out. Switch to Detailed to see everything worth knowing.</p></li>}
               </ul>
-              {spareNum > 0 && (
-                <p className="small muted" style={{ marginTop: 12 }}>
-                  About {money(monthlyEquivalent(type, v, m))} a month against {money(spareNum)} spare.
-                </p>
-              )}
             </section>
           </div>
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { dur, money } from "@/lib/format";
 import { EXAMPLES, PRODUCTS, risks, simulate, type Metrics, type Risk, type SavedOption } from "@/lib/finance";
 import { draftStore, savedStore } from "@/lib/store";
@@ -11,6 +12,14 @@ const DASHES = [undefined, "8 5", "2 4", "12 4 2 4"];
 
 interface Row { o: SavedOption; m: Metrics; r: Risk[] }
 type Line = [label: string, fmt: (r: Row) => string, key?: (r: Row) => number];
+
+const PRIORITIES: { id: string; label: string; line: string }[] = [
+  { id: "monthly", label: "Monthly affordability", line: "Regular payment" },
+  { id: "total", label: "Total cost", line: "Total you pay" },
+  { id: "length", label: "How long I’m tied in", line: "Time to finish" },
+  { id: "extra", label: "Interest and fees", line: "Cost on top" },
+  { id: "soon", label: "Cost in the next 3 months", line: "First 3 months" },
+];
 
 const LINES: Line[] = [
   ["Type", (r) => PRODUCTS[r.o.type].label],
@@ -25,6 +34,10 @@ const LINES: Line[] = [
 export function ComparePanel() {
   const saved = savedStore.use();
   const router = useRouter();
+  const [priorities, setPriorities] = useState<string[]>([]);
+  const togglePriority = (id: string) => setPriorities((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const wanted = PRIORITIES.filter((p) => priorities.includes(p.id)).map((p) => p.line);
+  const lines = [...LINES.filter(([l]) => wanted.includes(l)), ...LINES.filter(([l]) => !wanted.includes(l))];
   const rows: Row[] = saved.map((o) => { const m = simulate(o.type, o.values); return { o, m, r: risks(o.type, o.values, m) }; });
 
   const edit = (o: SavedOption) => {
@@ -47,6 +60,23 @@ export function ComparePanel() {
 
   return (
     <div className="stack" style={{ gap: 24 }}>
+      <div className="list stack" style={{ gap: 12 }}>
+        <p style={{ fontWeight: 600 }}>What do you most want to understand?</p>
+        <div className="chips" role="group" aria-label="Your priorities">
+          {PRIORITIES.map((p) => <button key={p.id} type="button" className="chip" aria-pressed={priorities.includes(p.id)} onClick={() => togglePriority(p.id)}>{p.label}</button>)}
+        </div>
+        {wanted.length > 0 && rows.length > 1 && (
+          <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
+            {LINES.filter(([l, , key]) => wanted.includes(l) && key).map(([l, fmt, key]) => {
+              const vals = rows.map(key!);
+              const lo = Math.min(...vals);
+              const who = rows.filter((_, i) => vals[i] === lo);
+              return <li key={l}><b>{l}:</b> lowest is {who.map((r) => r.o.name).join(" and ")} ({fmt(who[0])}).</li>;
+            })}
+            <li className="muted">These are facts about each option, sorted by what you picked. They’re not a recommendation.</li>
+          </ul>
+        )}
+      </div>
       <div className="table-wrap">
         <table className="cmp">
           <thead>
@@ -66,12 +96,12 @@ export function ComparePanel() {
             </tr>
           </thead>
           <tbody>
-            {LINES.map(([label, fmt, key]) => {
+            {lines.map(([label, fmt, key]) => {
               const vals = key ? rows.map(key) : null;
               const min = vals ? Math.min(...vals) : null;
               const markLow = vals && rows.length > 1 && vals.filter((x) => x === min).length === 1;
               return (
-                <tr key={label}>
+                <tr key={label} className={wanted.includes(label) ? "priority" : undefined}>
                   <th scope="row">{label}</th>
                   {rows.map((r, i) => <td key={r.o.id} className={markLow && vals[i] === min ? "lo" : undefined}>{fmt(r)}</td>)}
                 </tr>
