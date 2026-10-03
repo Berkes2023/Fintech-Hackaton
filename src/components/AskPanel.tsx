@@ -1,7 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { strugglingWith } from "@/lib/concepts";
 import type { ProductType } from "@/lib/finance";
+import { LearnNudge } from "./LearnNudge";
 
 interface Turn { role: "user" | "assistant"; content: string }
 
@@ -24,11 +26,16 @@ export function AskPanel({ type, context, hasDocument = false }: { type: Product
   const [streaming, setStreaming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  // Questions asked so far, kept even if the AI is unavailable, to spot a concept someone keeps returning to.
+  const [asked, setAsked] = useState<string[]>([]);
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const nudge = strugglingWith(asked);
   const ctl = useRef<AbortController | null>(null);
 
   async function ask(question: string) {
     question = question.trim();
     if (!question || streaming !== null) return;
+    setAsked((a) => [...a, question]);
     const next: Turn[] = [...turns, { role: "user", content: question }];
     setTurns(next);
     setQ("");
@@ -78,6 +85,7 @@ export function AskPanel({ type, context, hasDocument = false }: { type: Product
       <div className="chips">
         {(hasDocument ? ["Where does the document say the interest rate and fees?", ...CHIPS[type]] : CHIPS[type]).map((c) => <button key={c} type="button" className="chip" onClick={() => ask(c)} disabled={streaming !== null}>{c}</button>)}
       </div>
+      {nudge && !dismissed.includes(nudge.id) && <LearnNudge key={nudge.id} concept={nudge} onDismiss={() => setDismissed((d) => [...d, nudge.id])} />}
       {(turns.length > 0 || streaming !== null) && (
         <div className="thread" aria-live="polite">
           {turns.map((t, i) => (

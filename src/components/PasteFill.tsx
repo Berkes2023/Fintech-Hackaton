@@ -18,12 +18,17 @@ const MAX_FILE = 3 * 1024 * 1024;
 const ACCEPT = "application/pdf,image/png,image/jpeg,image/webp";
 
 export type Confidence = "high" | "medium" | "low";
-export interface Condition { kind: string; title: string; plain: string; quote: string }
+export interface Condition { kind: string; title: string; plain: string; why: string; quote: string; confidence: Confidence }
+export interface Contradiction { headline: string; headline_quote: string; full_terms: string; terms_quote: string }
+export type Prominence = "headline" | "body" | "small_print" | "absent";
+export type ProminenceMap = Record<"monthly_payment" | "total_payable" | "length" | "interest_rate" | "fees", Prominence>;
 
 interface Extracted {
   product: string;
   values: { id: string; value: string; quote: string; confidence: Confidence }[];
   conditions: Condition[];
+  contradictions: Contradiction[];
+  prominence: ProminenceMap | null;
   claim: string;
   stated: { monthly: string; monthly_quote: string; total: string; total_quote: string };
   document_text: string;
@@ -38,6 +43,8 @@ export interface FillResult {
   /** Fields needed for the total cost that the document didn't state (decided by code, not AI). */
   missing: string[];
   conditions: Condition[];
+  contradictions: Contradiction[];
+  prominence: ProminenceMap | null;
   claim: string;
   stated: { monthly?: number; total?: number; monthlyQuote?: string; totalQuote?: string };
   /** The document text as the AI saw it (already redacted), for "show me where". */
@@ -61,7 +68,12 @@ const toBase64 = (f: File) => new Promise<string>((resolve, reject) => {
 });
 const num = (s: string) => { const x = Number(String(s).replace(/[£,%\s]/g, "")); return Number.isFinite(x) && x > 0 ? x : undefined; };
 
-export function PasteFill({ onFill }: { onFill: (r: FillResult) => void }) {
+export interface Sample { label: string; text: string }
+const DEFAULT_SAMPLES: Sample[] = [{ label: "Example: key facts", text: SAMPLE }, { label: "Example: advert", text: ADVERT }];
+
+export function PasteFill({ onFill, samples = DEFAULT_SAMPLES, idPrefix = "paste", title = "Upload or paste the small print", open = true }: {
+  onFill: (r: FillResult) => void; samples?: Sample[]; idPrefix?: string; title?: string; open?: boolean;
+}) {
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -103,6 +115,8 @@ export function PasteFill({ onFill }: { onFill: (r: FillResult) => void }) {
       onFill({
         type, values, filled, evidence, missing,
         conditions: (data.conditions ?? []).slice(0, 12),
+        contradictions: (data.contradictions ?? []).slice(0, 4),
+        prominence: data.prominence ?? null,
         claim: data.claim ?? "",
         stated: {
           monthly: num(data.stated?.monthly ?? ""), total: num(data.stated?.total ?? ""),
@@ -120,14 +134,14 @@ export function PasteFill({ onFill }: { onFill: (r: FillResult) => void }) {
   }
 
   return (
-    <details className="paste list anchor-target" id="paste" open>
-      <summary>Upload or paste the small print <span aria-hidden="true">+</span></summary>
+    <details className="paste list anchor-target" id={idPrefix} open={open}>
+      <summary>{title} <span aria-hidden="true">+</span></summary>
       <div className="stack" style={{ marginTop: 14 }}>
         <p className="small muted">Add the key facts, terms, a letter or an advert. AI reads it, fills in the form and shows the exact words behind every value.</p>
-        <label htmlFor="paste-file" className="small" style={{ fontWeight: 600 }}>PDF or photo (under 3 MB), e.g. snap an advert</label>
-        <input id="paste-file" type="file" accept={ACCEPT} capture="environment" className="small" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        <label htmlFor="paste-text" className="small" style={{ fontWeight: 600 }}>Or paste the text</label>
-        <textarea id="paste-text" className="text" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the terms here…" maxLength={8000} />
+        <label htmlFor={`${idPrefix}-file`} className="small" style={{ fontWeight: 600 }}>PDF or photo (under 3 MB), e.g. snap an advert</label>
+        <input id={`${idPrefix}-file`} type="file" accept={ACCEPT} capture="environment" className="small" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <label htmlFor={`${idPrefix}-text`} className="small" style={{ fontWeight: 600 }}>Or paste the text</label>
+        <textarea id={`${idPrefix}-text`} className="text" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the terms here…" maxLength={8000} />
         {preview && preview.found.length > 0 && (
           <p className="privacy small" role="status">
             <b>Privacy shield:</b> we’ll remove {preview.found.map((f) => `${f.count} ${f.kind}${f.count > 1 ? "s" : ""}`).join(", ")} before anything is sent. They aren’t needed to work out the cost.
@@ -135,8 +149,7 @@ export function PasteFill({ onFill }: { onFill: (r: FillResult) => void }) {
         )}
         <div className="row">
           <button type="button" className="btn btn-dark btn-sm" onClick={run} disabled={busy}>{busy ? "Reading…" : "Decode it"}</button>
-          <button type="button" className="btn btn-light btn-sm" onClick={() => { setText(SAMPLE); setFile(null); }}>Example: key facts</button>
-          <button type="button" className="btn btn-light btn-sm" onClick={() => { setText(ADVERT); setFile(null); }}>Example: advert</button>
+          {samples.map((x) => <button key={x.label} type="button" className="btn btn-light btn-sm" onClick={() => { setText(x.text); setFile(null); }}>{x.label}</button>)}
         </div>
         {file && <p className="small muted">Photos and PDFs go to the AI as they are, so cover any personal details first.</p>}
         {msg && <p className="small" aria-live="polite">{msg}</p>}

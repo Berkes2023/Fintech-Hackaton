@@ -29,6 +29,8 @@ Users enter a commitment-based product (loan, credit card, overdraft, BNPL, subs
 - `src/lib/finance.ts` also holds `twin()`/`scenarios()` (digital twin), `stressTest()`, `levers()` (what changes the total) and `crossCheck()` (document figures vs ours).
 - `src/lib/privacy.ts`: redacts personal details in the browser before text goes to AI. `src/lib/highlight.ts`: finds quotes for "Show me where".
 - `src/lib/api.ts` + `src/app/api/v1/label`: public, AI-free Money Label API (documented at `/developers`).
+- `src/lib/dna.ts`: Product DNA (universal schema), questions to ask, reverse calculator, future-payment dates, commitment map. `src/lib/concepts.ts`: fixed explainers for the learning nudge and misconceptions.
+- Pages: `/firewall` (Commitment Firewall demo), `/commitments` (commitment map), `/reverse`, `/diff` (contract diff), `/developers`.
 - `analysis/rates_vs_assets.py`: pandas script correlating asset moves with rate changes (same sources).
 
 ## Commands

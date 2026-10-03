@@ -8,8 +8,9 @@ import {
   defaults, explain, fieldLabel, GLOSSARY, isProductType, moneyLabel, monthlyEquivalent, PRODUCT_TYPES, PRODUCTS,
   risks, RISK_LABEL, simulate, suggestName, understandingCheck, visibleFields, type ProductType,
 } from "@/lib/finance";
+import { productDNA, questionsToAsk } from "@/lib/dna";
 import type { Mark } from "@/lib/highlight";
-import { draftStore, MAX_SAVED, newOptionId, savedStore, type Draft } from "@/lib/store";
+import { commitmentsStore, draftStore, MAX_COMMITMENTS, MAX_SAVED, newOptionId, savedStore, thisMonth, type Draft } from "@/lib/store";
 import { AskPanel } from "./AskPanel";
 import { Chart, type Series } from "./Chart";
 import { ClaimReality } from "./ClaimReality";
@@ -17,6 +18,10 @@ import { CommitCheck } from "./CommitCheck";
 import { CostScanner } from "./CostScanner";
 import { DigitalTwin } from "./DigitalTwin";
 import { DocumentPanel } from "./DocumentPanel";
+import { FuturePayments } from "./FuturePayments";
+import { PresentationCheck } from "./PresentationCheck";
+import { ProductDNACard } from "./ProductDNACard";
+import { Questions } from "./Questions";
 import { MoneyLabelCard } from "./MoneyLabelCard";
 import { PasteFill, type FillResult } from "./PasteFill";
 import { StressTest, type Budget } from "./StressTest";
@@ -50,6 +55,7 @@ export function Checker() {
   const [saveName, setSaveName] = useState("");
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const saved = savedStore.use();
+  const commitments = commitmentsStore.use();
   const filled = extracted?.filled ?? [];
   const missing = extracted?.missing ?? [];
 
@@ -91,6 +97,7 @@ export function Checker() {
         ...Object.entries(extracted.evidence).map(([id, e]) => ({ key: `f-${id}`, quote: e.quote })),
         ...extracted.conditions.map((c, i) => ({ key: `cond-${i}`, quote: c.quote })),
         ...(extracted.claim ? [{ key: "claim", quote: extracted.claim }] : []),
+        ...extracted.contradictions.flatMap((c, i) => [{ key: `hl-${i}`, quote: c.headline_quote }, { key: `tm-${i}`, quote: c.terms_quote }]),
         ...(extracted.stated.monthlyQuote ? [{ key: "stated-monthly", quote: extracted.stated.monthlyQuote }] : []),
         ...(extracted.stated.totalQuote ? [{ key: "stated-total", quote: extracted.stated.totalQuote }] : []),
       ].filter((x) => x.quote)
@@ -152,6 +159,17 @@ export function Checker() {
       lines.push("No document was provided: the figures were typed in by the person.");
     }
     return lines.join("\n");
+  };
+
+  const kinds = extracted?.conditions.map((c) => c.kind) ?? [];
+  const dna = productDNA(type, v, m, kinds, missingLabels);
+  const questions = questionsToAsk(type, v, { missing, conditionKinds: kinds, fromDocument: !!extracted, statedTotal: !!extracted?.stated.total });
+
+  const addCommitment = () => {
+    if (commitments.length >= MAX_COMMITMENTS) { setSaveMsg(`Your map holds up to ${MAX_COMMITMENTS}. Remove one on the Commitment map first.`); return; }
+    commitmentsStore.set([...commitments, { id: newOptionId(), name: saveName.trim() || suggestName(type, v), type, values: { ...v } }]);
+    setSaveName("");
+    setSaveMsg("Added to your commitment map.");
   };
 
   const save = () => {
@@ -258,6 +276,8 @@ export function Checker() {
             <ClaimReality claim={extracted.claim} m={m} credit={product.credit} missing={missingLabels} stated={extracted.stated} onShow={show} />
           )}
 
+          {extracted && <PresentationCheck contradictions={extracted.contradictions} prominence={extracted.prominence} onShow={show} />}
+
           {extracted && (extracted.conditions.length > 0 || extracted.source) && (
             <div className="grid-2 doc-row">
               <CostScanner conditions={extracted.conditions} onShow={show} />
@@ -273,6 +293,11 @@ export function Checker() {
             </div>
           </div>
 
+          <div className="grid-2">
+            <ProductDNACard dna={dna} />
+            <Questions questions={questions} />
+          </div>
+
           <section className="card stack" aria-labelledby="chart-title">
             <div className="row" style={{ justifyContent: "space-between" }}>
               <h2 id="chart-title" className="h3">Where your money goes over time</h2>
@@ -285,6 +310,7 @@ export function Checker() {
             <Chart series={series} refLine={{ y: product.credit ? m.principal : m.headlineTotal, label: product.credit ? "Borrowed" : "Advertised price" }} label="Total amount paid over time" />
           </section>
 
+          <FuturePayments m={m} start={thisMonth()} perLabel={perLabel} />
           <DigitalTwin key={`twin-${type}`} type={type} v={v} />
           <WhatIf key={`${type}-${String(v.payType)}`} type={type} v={v} base={m} onApply={setField} />
           <StressTest budget={budget} onChange={setBudget} payment={monthlyEquivalent(type, v, m)} perLabel={perLabel} />
@@ -322,7 +348,13 @@ export function Checker() {
               <input id="save-name" value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder={suggestName(type, v)} />
             </div>
             <button type="button" className="btn btn-dark" onClick={save}>Add to comparison</button>
-            {saveMsg && <p className="small" role="status" style={{ flexBasis: "100%" }}>{saveMsg} {saveMsg.startsWith("Added") && <Link href="/compare">Open Compare</Link>}</p>}
+            <button type="button" className="btn btn-light" onClick={addCommitment}>I already pay this</button>
+            {saveMsg && (
+              <p className="small" role="status" style={{ flexBasis: "100%" }}>
+                {saveMsg} {saveMsg.startsWith("Added. See") && <Link href="/compare">Open Compare</Link>}
+                {saveMsg.startsWith("Added to your") && <Link href="/commitments">Open your commitment map</Link>}
+              </p>
+            )}
           </div>
         </div>
       </div>

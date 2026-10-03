@@ -1,3 +1,4 @@
+import { productDNA } from "./dna";
 import { explain, isProductType, moneyLabel, PRODUCTS, risks, simulate, type ProductType, type Values } from "./finance";
 
 // The public "transparency layer": any site can send a product's terms and get the same Money Label back.
@@ -47,6 +48,7 @@ export function buildLabel({ type, values }: LabelRequest, defaulted: string[] =
       months: m.never ? null : m.end,
       never_cleared: m.never,
     },
+    dna: productDNA(type, values, m, [], defaulted),
     label: { rows: label.rows, notes: label.notes, breakdown: label.parts.map((p) => ({ label: p.label, amount: r2(p.value) })) },
     risks: risks(type, values, m).map(({ lvl, title, body }) => ({ level: lvl, title, body })),
     plain_english: explain(type, values, m).map((p) => p.replace(/\*\*/g, "")),

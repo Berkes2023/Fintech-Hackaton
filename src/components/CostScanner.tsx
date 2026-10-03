@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { Condition } from "./PasteFill";
 
 const KIND: Record<string, string> = {
@@ -11,9 +14,11 @@ const KIND: Record<string, string> = {
   credit_check: "Credit file",
   other: "Condition",
 };
+const CONF = { high: "High", medium: "Medium", low: "Low: check this one" } as const;
 
-/** Every condition the AI found in the small print, each one linked back to its sentence. */
+/** Every condition the AI found, each opening into a traceable explanation linked to its sentence. */
 export function CostScanner({ conditions, onShow }: { conditions: Condition[]; onShow: (key: string) => void }) {
+  const [open, setOpen] = useState<number | null>(0);
   if (!conditions.length) return null;
   return (
     <section className="card stack" aria-labelledby="scan-title">
@@ -25,13 +30,22 @@ export function CostScanner({ conditions, onShow }: { conditions: Condition[]; o
         {conditions.map((c, i) => (
           <li key={i} className="risk">
             <span className="sev watch">{KIND[c.kind] ?? "Condition"}</span>
-            <b>{c.title}</b>
-            <p>{c.plain}</p>
-            <button type="button" className="link small" onClick={() => onShow(`cond-${i}`)}>Show me where</button>
+            <button type="button" className="clause-toggle" aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)}>
+              <b>{c.title}</b><span aria-hidden="true">{open === i ? "−" : "+"}</span>
+            </button>
+            {open === i ? (
+              <ol className="clause">
+                <li><span className="caption">Original wording</span><p className="quote">“{c.quote}”</p></li>
+                <li><span className="caption">What it means</span><p>{c.plain}</p></li>
+                {c.why && <li><span className="caption">Why it matters</span><p>{c.why}</p></li>}
+                <li><span className="caption">Evidence</span><button type="button" className="link small" onClick={() => onShow(`cond-${i}`)}>Show me where in the document</button></li>
+                <li><span className="caption">Confidence</span><p>{CONF[c.confidence] ?? "Medium"}</p></li>
+              </ol>
+            ) : <p>{c.plain}</p>}
           </li>
         ))}
       </ul>
-      <p className="small muted">Found by AI in your document. Each one links to the exact sentence, so you can check it yourself.</p>
+      <p className="small muted">Found by AI in your document. Every one links to its exact sentence, so you can check it yourself.</p>
     </section>
   );
 }

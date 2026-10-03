@@ -423,3 +423,41 @@ pre.code { margin: 16px 0 0; padding: 20px 24px; background: var(--color-ink); c
 @media (max-width: 720px) { .ext-mock { grid-template-columns: minmax(0, 1fr); } }
 .ext-page { display: grid; gap: 8px; padding: 24px; background: var(--color-bone); border-radius: var(--radius-list); }
 .ext-pop { display: grid; gap: 8px; padding: 20px; background: var(--color-bone); border: 2px solid var(--color-ink); border-radius: var(--radius-list); box-shadow: 0 20px 40px rgba(0,0,0,.12); }
+
+/* ---------- mega: clauses, presentation, DNA, questions, ghost, nudge, firewall, map ---------- */
+.clause-toggle { display: flex; justify-content: space-between; gap: 12px; width: 100%; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; font-size: 16px; }
+.clause { list-style: none; margin: 4px 0 0; padding: 0 0 0 14px; border-left: 2px solid var(--color-ink); display: grid; gap: 10px; width: 100%; }
+.clause li { display: grid; gap: 2px; }
+.contra { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border: 1px solid var(--color-ash-grey); border-radius: var(--radius-list); overflow: hidden; }
+.contra > div { display: grid; gap: 6px; align-content: start; padding: 18px 20px; }
+.contra > div:first-child { background: var(--color-mist); }
+@media (max-width: 640px) { .contra { grid-template-columns: minmax(0, 1fr); } }
+.prominence { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.prominence li { display: grid; grid-template-columns: minmax(0, 140px) minmax(0, 1fr) 130px; gap: 12px; align-items: center; font-size: 14px; }
+.prominence b { font-size: 13px; text-align: right; }
+.dna { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; font-variant-numeric: tabular-nums; }
+.dna > div { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--color-ash-grey); }
+.dna dt { font-size: 11px; font-weight: 700; letter-spacing: .015em; text-transform: uppercase; color: var(--color-slate); }
+.dna dd { margin: 0; font-weight: 600; font-size: 14.5px; }
+.questions { margin: 0; padding-left: 22px; display: grid; gap: 10px; }
+.questions li b { font-weight: 600; }
+.ghost { list-style: none; margin: 0; padding: 0 0 0 18px; border-left: 3px dotted var(--color-ink); display: grid; gap: 0; }
+.ghost li { position: relative; display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 9px 0; font-size: 14.5px; border-bottom: 1px solid var(--color-mist); }
+.ghost li::before { content: ""; position: absolute; left: -26px; top: 15px; width: 13px; height: 13px; border-radius: 50%; background: var(--color-bone); border: 3px solid var(--color-ink); }
+.ghost .ghost-date { font-weight: 700; font-variant-numeric: tabular-nums; }
+.ghost li.ghost-end::before { background: var(--color-ink); }
+@media (max-width: 560px) { .ghost li { grid-template-columns: minmax(0, 1fr) auto; } .ghost li > span:nth-child(2) { grid-column: 1 / -1; grid-row: 2; } }
+.nudge { display: grid; gap: 10px; padding: 16px 18px; border: 2px solid var(--color-ink); border-radius: var(--radius-list); background: var(--color-mist); }
+
+.firewall .shop { border: 1px solid var(--color-ash-grey); border-radius: var(--radius-card); padding: 24px; display: grid; gap: 16px; background: var(--color-bone); }
+.shop-item { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 28px; align-items: center; }
+@media (max-width: 640px) { .shop-item { grid-template-columns: minmax(0, 1fr); } }
+.shop-img { aspect-ratio: 4 / 3; max-width: 100%; border-radius: var(--radius-list); background: linear-gradient(135deg, #e7e7ea, #c9c9cd); display: grid; place-items: center; color: var(--color-slate); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; font-size: 13px; }
+
+.gantt { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.gantt li { display: grid; grid-template-columns: minmax(0, 200px) minmax(0, 1fr) minmax(0, 200px) auto; gap: 14px; align-items: center; }
+@media (max-width: 760px) { .gantt li { grid-template-columns: minmax(0, 1fr) auto; } .gantt-track { grid-column: 1 / -1; grid-row: 2; } }
+.gantt-name { display: grid; }
+.gantt-track { height: 16px; background: var(--color-mist); border-radius: var(--radius-pill); overflow: hidden; }
+.gantt-bar { display: block; height: 100%; background: var(--color-ink); border-radius: var(--radius-pill); }
+.gantt-bar.ongoing { background: repeating-linear-gradient(90deg, var(--color-ink) 0 10px, var(--color-slate) 10px 14px); }

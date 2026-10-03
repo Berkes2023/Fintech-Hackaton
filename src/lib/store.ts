@@ -48,3 +48,13 @@ export const draftStore = createStore<Draft>("bys:draft", DEFAULT_DRAFT, (x): x 
 export const MAX_SAVED = 4;
 
 export const newOptionId = () => `o${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+/** Things the person already pays for, for the commitment map. Browser-only, like everything here. */
+export const commitmentsStore = createStore<SavedOption[]>("bys:commitments", [], (x): x is SavedOption[] => Array.isArray(x) && x.every(isOption));
+export const MAX_COMMITMENTS = 12;
+
+/** This month as "YYYY-MM". Payment dates are counted from here (most first payments land a month later). */
+export function thisMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}

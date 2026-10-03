@@ -15,7 +15,7 @@ const str = (description: string) => ({ type: "string", description });
 const SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["product", "values", "conditions", "claim", "stated", "document_text"],
+  required: ["product", "values", "conditions", "contradictions", "prominence", "claim", "stated", "document_text"],
   properties: {
     product: { type: "string", enum: PRODUCT_TYPES },
     values: {
@@ -39,14 +39,38 @@ const SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["kind", "title", "plain", "quote"],
+        required: ["kind", "title", "plain", "why", "quote", "confidence"],
         properties: {
           kind: { type: "string", enum: CONDITION_KINDS },
           title: str("A short heading, e.g. 'Variable rate'."),
-          plain: str("One plain-English sentence on what it means for the person. Explain, never advise."),
+          plain: str("One plain-English sentence on what the clause means. Explain, never advise."),
+          why: str("One sentence on why it could matter to the person's costs or flexibility."),
           quote: str("The exact words from the document, verbatim, under 200 characters."),
+          confidence: { type: "string", enum: ["high", "medium", "low"] },
         },
       },
+    },
+    contradictions: {
+      type: "array",
+      description: "Places where a headline or prominent claim gives a different impression from the full terms (e.g. '0% interest' vs '0% for 3 months, then 29.9% APR'). Describe neutrally; never accuse.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["headline", "headline_quote", "full_terms", "terms_quote"],
+        properties: {
+          headline: str("What the headline suggests, in plain words."),
+          headline_quote: str("The headline's exact words."),
+          full_terms: str("What the full terms say, in plain words."),
+          terms_quote: str("The exact words from the full terms."),
+        },
+      },
+    },
+    prominence: {
+      type: "object",
+      additionalProperties: false,
+      required: ["monthly_payment", "total_payable", "length", "interest_rate", "fees"],
+      description: "How prominently each fact is presented: in a headline or large text, in normal body text, only in small print or footnotes, or not at all.",
+      properties: Object.fromEntries(["monthly_payment", "total_payable", "length", "interest_rate", "fees"].map((k) => [k, { type: "string", enum: ["headline", "body", "small_print", "absent"] }])),
     },
     claim: str("The most prominent marketing claim, verbatim (e.g. 'ONLY £99 A MONTH!'), or empty if there is none."),
     stated: {

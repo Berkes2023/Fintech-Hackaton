@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { CONCEPTS } from "@/lib/concepts";
 import { GLOSSARY, PRODUCT_TYPES, PRODUCTS } from "@/lib/finance";
 
 export const metadata: Metadata = { title: "Learn" };
@@ -53,6 +54,21 @@ export default function LearnPage() {
           Introductory prices rise automatically unless you cancel. Phone and broadband contracts often include yearly price rises. Since January 2025, Ofcom rules mean these must be shown in pounds and pence. Leaving a contract early can cost close to the remaining payments.
         </p>
 
+        <h2 id="misconceptions" className="h2 anchor-target">Common misconceptions</h2>
+        <p>Ideas that are easy to get wrong. These are common misunderstandings, written by us. They aren’t statistics about real customers.</p>
+      </div>
+
+      <div className="grid-3" style={{ marginTop: 24 }}>
+        {CONCEPTS.map((c) => (
+          <div key={c.id} className="list stack">
+            <span className="caption">{c.title}</span>
+            <p style={{ fontWeight: 600 }}>{c.misconception}</p>
+            <p className="small muted">{c.explain}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="prose">
         <h2 id="jargon" className="h2 anchor-target">Jargon buster</h2>
       </div>
 

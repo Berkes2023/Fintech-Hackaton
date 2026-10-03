@@ -36,7 +36,10 @@ export const NAV: NavGroup[] = [
       { href: "/check", title: "Cost checker", desc: "Short-term and long-term cost in one view", icon: "calc" },
       { href: "/compare", title: "Compare options", desc: "Up to four products, side by side", icon: "compare" },
       { href: "/check#paste", title: "Read the small print", desc: "Paste the terms and AI fills in the form", icon: "doc" },
-      { href: "/check#afford", title: "Can it fit your month?", desc: "See the payment against your spare money", icon: "wallet" },
+      { href: "/check#afford", title: "Stress test your month", desc: "What’s left if bills rise or income falls", icon: "wallet" },
+      { href: "/diff", title: "Contract diff", desc: "Two offers, clause by clause", icon: "doc" },
+      { href: "/commitments", title: "Commitment map", desc: "Everything you pay, on one timeline", icon: "chart" },
+      { href: "/reverse", title: "Reverse calculator", desc: "What £150 a month really means", icon: "calc" },
     ],
     feature: {
       href: "/check?type=card",
@@ -73,7 +76,8 @@ export const NAV: NavGroup[] = [
       { href: "/responsible-ai", title: "Responsible AI", desc: "Where we use AI, and the rules it follows", icon: "shield" },
       { href: "/responsible-ai#maths", title: "How we calculate", desc: "The maths behind every number", icon: "calc" },
       { href: "/responsible-ai#limits", title: "What we don’t do", desc: "No advice, no bank access, no data kept", icon: "help" },
-      { href: "/developers", title: "Developer API", desc: "Money Labels for any website", icon: "code" },
+      { href: "/developers", title: "Developer API", desc: "Money Labels and Product DNA for any website", icon: "code" },
+      { href: "/firewall", title: "Commitment Firewall", desc: "A check at the moment of “confirm”", icon: "shield" },
     ],
     feature: {
       href: "/responsible-ai",
