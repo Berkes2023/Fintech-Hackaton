@@ -6,8 +6,8 @@ import { ApiError, GoogleGenAI, ThinkingLevel, type ThinkingConfig } from "@goog
 /**
  * The one Gemini model used everywhere. Set GEMINI_MODEL (server-side) to change it without touching code.
  * Default: gemini-3.8-flash, a stable model listed as free of charge on the Gemini API pricing page.
- * Not verified against this project's key from here: if it isn't available, requests fail with "upstream"
- * and the model can be changed with GEMINI_MODEL. There is deliberately no automatic fallback.
+ * Not verified against this project's key from here: if it isn't available, requests fail with
+ * "model_unavailable" and the model can be changed with GEMINI_MODEL. There is deliberately no automatic fallback.
  */
 export const MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
 /** Give up on a single AI request after this long, so the page never hangs. */
