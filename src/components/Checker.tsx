@@ -242,9 +242,12 @@ export function Checker() {
           <div className="row anchor-target" id="results-top" style={{ justifyContent: "space-between" }}>
             <span className="pill-label">{draft.example ? "Example: paying for a £1,200 laptop" : extracted ? `${product.label} · decoded from your document` : `${product.label} · your figures`}</span>
             <div className="row">
-              <div className="segmented" role="group" aria-label="How much detail">
-                <button type="button" aria-pressed={!detailed} onClick={() => setDetailed(false)}>Simple</button>
-                <button type="button" aria-pressed={detailed} onClick={() => setDetailed(true)}>Detailed</button>
+              <div className="view-switch">
+                <div className="segmented" role="group" aria-label="How much to show">
+                  <button type="button" aria-pressed={!detailed} onClick={() => setDetailed(false)} title="Key costs and things to know">Quick view</button>
+                  <button type="button" aria-pressed={detailed} onClick={() => setDetailed(true)} title="All costs, assumptions, terms and calculations">Full breakdown</button>
+                </div>
+                <span className="small muted">{detailed ? "All costs, assumptions, terms and calculations." : "Key costs and things to know."} Same numbers either way.</span>
               </div>
               <button type="button" className="link small" onClick={() => { clearDoc(); commit({ type, values: defaults(type), example: false }); }}>Reset</button>
             </div>
@@ -285,13 +288,18 @@ export function Checker() {
             </div>
           )}
 
-          <div className="label-row">
-            <MoneyLabelCard label={label} product={product.label} estimate={missingLabels} />
-            <div className="stack">
-              <CommitCheck key={type} type={type} m={m} risks={riskList} check={understandingCheck(type, v, m)} perLabel={perLabel} onSave={save} />
-              {detailed && <WhyNumber type={type} v={v} m={m} />}
-            </div>
-          </div>
+          {/* The checkpoint sits on its own line so changing product types never leaves a gap beside it. */}
+          <CommitCheck key={type} type={type} m={m} risks={riskList} check={understandingCheck(type, v, m)} perLabel={perLabel} onSave={save} />
+
+          {(() => {
+            const why = detailed ? <WhyNumber type={type} v={v} m={m} /> : null;
+            return (
+              <div className={why && product.credit && !m.never ? "label-row" : "label-row single"}>
+                <MoneyLabelCard label={label} product={product.label} estimate={missingLabels} />
+                {why}
+              </div>
+            );
+          })()}
 
           <div className="grid-2">
             <ProductDNACard dna={dna} />

@@ -28,10 +28,12 @@ export function CommitCheck({ type, m, risks, check, perLabel, onSave }: Props) 
 
   return (
     <>
-      <section className="card stack commit-cta" aria-labelledby="commit-title">
-        <span className="caption">Before you sign</span>
-        <h2 id="commit-title" className="h3">Take 30 seconds to check you’re sure what you’re agreeing to</h2>
-        <p className="small muted">A short summary of what you’d commit to, and one quick question. Nothing is signed or sent.</p>
+      <section className="commit-cta" aria-labelledby="commit-title">
+        <div className="stack" style={{ gap: 4 }}>
+          <span className="caption">Before you sign</span>
+          <h2 id="commit-title" className="h3">Take 30 seconds to check you’re sure what you’re agreeing to</h2>
+          <p className="small muted">A short summary of what you’d commit to, and one quick question. Nothing is signed or sent.</p>
+        </div>
         <button type="button" className="btn btn-dark" onClick={open}>Start the check</button>
       </section>
 

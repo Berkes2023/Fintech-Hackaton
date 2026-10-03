@@ -1,0 +1,145 @@
+import { describe, expect, it } from "vitest";
+import { simulate } from "./finance";
+import {
+  applyLevers, BANNED, exampleBand, exampleScenarios, habit, hiddenCost, impact, position, recurringIncome, schedule,
+  simulateMonths, statements, toMonthly, type FutureEvent, type Picture, type Scenario,
+} from "./sim";
+
+const close = (a: number, b: number, tol = 0.05) => expect(Math.abs(a - b)).toBeLessThanOrEqual(tol);
+const item = (label: string, amount: number, extra = {}) => ({ id: label, label, amount, freq: "monthly" as const, origin: "manual" as const, ...extra });
+
+const picture: Picture = {
+  income: [item("Salary", 2500)],
+  essentials: [item("Rent", 850), item("Bills", 400)],
+  discretionary: [item("Eating out", 250)],
+  debts: [{ ...item("Old loan", 180, { endsIn: 5 }), kind: "loan" }],
+  reserves: { savings: 1500, emergency: 500 },
+  pension: { amount: 120, alreadyDeducted: true },
+  otherSaving: [],
+};
+const events: FutureEvent[] = [
+  { id: "b", label: "Bonus", amount: 3000, month: 2, direction: "in", recurrence: "one_off" },
+  { id: "r", label: "Rent rise", amount: 100, month: 6, direction: "out", recurrence: "recurring_from" },
+];
+const car: Scenario = { id: "a", label: "A", source: "illustrative", amount: 20000, apr: 8.9, term: 48, upfrontFee: 0, monthlyFee: 0, balloon: 0, startIn: 0, fieldSources: {}, lateFee: 15 };
+
+describe("financial picture", () => {
+  it("shows the monthly position line by line", () => {
+    const p = position(picture);
+    expect(p.value).toBe(2500 - 850 - 400 - 250 - 180);
+    expect(p.lines.find((l) => l.label === "Salary")?.source).toBe("you_told_us");
+  });
+
+  it("doesn't count a pension already taken from take-home pay", () => {
+    expect(position(picture).lines.some((l) => l.label === "Pension contribution")).toBe(false);
+    expect(position({ ...picture, pension: { amount: 120, alreadyDeducted: false } }).value).toBe(position(picture).value - 120);
+  });
+
+  it("converts weekly and yearly amounts to monthly", () => {
+    close(toMonthly(8 * 4, "weekly"), 138.67, 0.01);
+    expect(toMonthly(1200, "yearly")).toBe(100);
+  });
+});
+
+describe("one-off money is never recurring", () => {
+  it("a £3,000 bonus leaves recurring income at the salary", () => {
+    const rows = simulateMonths(picture, events, null, 3);
+    expect(recurringIncome(picture)).toBe(2500);
+    expect(rows[1].recurringIn).toBe(2500);
+    expect(rows[1].oneOffIn).toBe(3000);
+    expect(rows[1].left - rows[1].normalLeft).toBe(3000);
+  });
+
+  it("applies dated changes: a loan ending and a rent rise", () => {
+    const rows = simulateMonths(picture, events, null, 8);
+    expect(rows[4].existingDebt).toBe(0); // old loan stops in month 5
+    expect(rows[3].existingDebt).toBe(180);
+    expect(rows[5].recurringOut - rows[4].recurringOut).toBe(100);
+  });
+});
+
+describe("finance scenarios", () => {
+  it("matches the main loan engine", () => {
+    close(schedule(car).total, simulate("loan", { amount: 20000, apr: 8.9, term: 48, fee: 0 }).total, 0.05);
+  });
+
+  it("includes upfront fees and a balloon in the totals", () => {
+    const withFee = schedule({ ...car, upfrontFee: 199 });
+    close(withFee.total - schedule(car).total, 199, 0.01);
+    const pcp = schedule({ ...car, balloon: 8000 });
+    expect(pcp.regular).toBeLessThan(schedule(car).regular);
+    expect(pcp.payments.at(-1)!).toBeGreaterThan(8000);
+  });
+
+  it("an upfront fee is a one-off cost, not part of the regular monthly position", () => {
+    const rows = simulateMonths(picture, [], { ...car, upfrontFee: 199 }, 2);
+    const plain = simulateMonths(picture, [], car, 2);
+    expect(rows[0].normalLeft).toBeCloseTo(plain[0].normalLeft, 2);
+    expect(rows[0].oneOffOut).toBe(199);
+    expect(rows[0].left).toBeCloseTo(plain[0].left - 199, 2);
+  });
+
+  it("a delayed start pushes the first payment back", () => {
+    expect(schedule({ ...car, startIn: 2 }).payments.slice(0, 3).map((x) => x > 0)).toEqual([false, false, true]);
+  });
+
+  it("uses a chosen profile to pick example rates, and never converts a numeric score", () => {
+    expect(exampleBand({ mode: "band", band: "good" }).band).toBe("good");
+    expect(exampleBand({ mode: "score", score: { value: 720, source: "transunion" } }).band).toBeNull();
+    expect(exampleScenarios({ price: 25000, deposit: 5000, saved: 0 }, { mode: "unknown" }).map((s) => s.apr)).toHaveLength(4);
+    expect(exampleScenarios({ price: 25000, deposit: 5000, saved: 0 }, { mode: "band", band: "good" }).every((s) => s.amount === 20000)).toBe(true);
+  });
+});
+
+describe("impact and hidden cost", () => {
+  it("connects the payment to income", () => {
+    const i = impact(picture, car);
+    close(i.after, position(picture).value - i.payment, 0.01);
+    close(i.pctOfIncome, (i.payment / 2500) * 100, 0.01);
+    expect(i.totalCommitments).toBeCloseTo(180 + i.payment, 1);
+  });
+
+  it("splits hidden cost into contract, cash flow and cumulative", () => {
+    const h = hiddenCost(picture, events, car);
+    expect(h.contract.totalCost).toBeGreaterThan(0);
+    expect(h.cashflow.bufferAfter12).toBeLessThan(h.cashflow.bufferAfter12Without);
+    expect(h.cumulative.at24).toBeGreaterThan(h.cumulative.at12);
+  });
+
+  it("repeated spending adds up: £8 four times a week", () => {
+    expect(habit(8, 4)).toEqual({ week: 32, month: 138.67, year: 1664 });
+  });
+});
+
+describe("what if", () => {
+  const c = { picture, events, scenario: car };
+  it("waiting for the bonus lowers the amount and delays the start", () => {
+    const w = applyLevers(c, ["waitBonus"]);
+    expect(w.scenario.amount).toBe(17000);
+    expect(w.scenario.startIn).toBe(2);
+    expect(w.events.some((e) => e.id === "b")).toBe(false);
+  });
+
+  it("an income dip lasts three months, then recovers", () => {
+    const w = applyLevers(c, ["incomeDip"]);
+    const rows = simulateMonths(w.picture, w.events, w.scenario, 5);
+    expect(rows[0].recurringIn).toBe(2000);
+    expect(rows[3].recurringIn).toBe(2500);
+  });
+
+  it("APR and term levers move the totals the right way", () => {
+    expect(schedule(applyLevers(c, ["aprUp"]).scenario).total).toBeGreaterThan(schedule(car).total);
+    expect(schedule(applyLevers(c, ["term60"]).scenario).regular).toBeLessThan(schedule(car).regular);
+  });
+});
+
+describe("careful wording", () => {
+  it("speaks conditionally about a buffer running out, and never gives a verdict", () => {
+    const tight: Picture = { ...picture, income: [item("Salary", 1900)] };
+    const rows = simulateMonths(tight, [], car, 24);
+    const said = statements(rows, 2000, (m) => `month ${m}`);
+    expect(said.join(" ")).toMatch(/Under the assumptions you’ve entered/);
+    expect(said.join(" ")).toMatch(/would reach about £0 around month/);
+    for (const s of said) expect(s).not.toMatch(BANNED);
+  });
+});

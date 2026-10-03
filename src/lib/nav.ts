@@ -79,7 +79,7 @@ export const NAV: NavGroup[] = [
       { href: "/responsible-ai#maths", title: "How we calculate", desc: "The maths behind every number", icon: "calc" },
       { href: "/responsible-ai#limits", title: "What we don’t do", desc: "No advice, no bank access, no data kept", icon: "help" },
       { href: "/developers", title: "Developer API", desc: "Money Labels and Product DNA for any website", icon: "code" },
-      { href: "/firewall", title: "Commitment Firewall", desc: "A check at the moment of “confirm”", icon: "shield" },
+      { href: "/firewall", title: "Commitment Firewall", desc: "Future vision: an optional checkout companion", icon: "shield" },
     ],
     feature: {
       href: "/responsible-ai",

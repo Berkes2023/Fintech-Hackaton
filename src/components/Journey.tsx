@@ -119,7 +119,7 @@ export function Journey() {
           <p className="muted">Start with what you want to do. We’ll walk you through it step by step.</p>
           <div className="choice-grid">
             {(Object.keys(GOALS) as Goal[]).map((g) => (
-              <button key={g} type="button" className={`choice${s.goal === g ? " on" : ""}`} onClick={() => { journeyStore.set(startGoal(s, g)); setPicked(null); setLevers([]); go(1); }}>
+              <button key={g} type="button" className={`choice${s.goal === g ? " on" : ""}`} onClick={() => { if (g === "car") { router.push("/decide/car"); return; } journeyStore.set(startGoal(s, g)); setPicked(null); setLevers([]); go(1); }}>
                 <span className="icon"><Icon name={GOALS[g].icon} size={24} /></span>
                 <b>{GOALS[g].label}</b>
                 <span className="small muted">{GOALS[g].blurb}</span>

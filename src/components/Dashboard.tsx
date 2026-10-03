@@ -18,6 +18,7 @@ const TOOLS = [
 export function Dashboard() {
   const router = useRouter();
   const open = (g: Goal) => {
+    if (g === "car") { router.push("/decide/car"); return; }
     journeyStore.set(startGoal(journeyStore.get(), g));
     router.push("/plan?step=1");
   };
@@ -33,9 +34,16 @@ export function Dashboard() {
             <span className="icon"><Icon name={GOALS[g].icon} size={24} /></span>
             <b>{GOALS[g].label}</b>
             <span className="small">{GOALS[g].blurb}</span>
+            <span className={g === "car" ? "dash-tag full" : "dash-tag"}>{g === "car" ? "Full journey" : "Simplified"}</span>
             <span className="dash-go" aria-hidden="true"><Icon name="arrow" size={18} /></span>
           </button>
         ))}
+        <Link href="/start" className="dash-tile">
+          <span className="icon"><Icon name="spark" size={24} /></span>
+          <b>Something else</b>
+          <span className="small">Answer a few questions and we’ll suggest where to start</span>
+          <span className="dash-go" aria-hidden="true"><Icon name="arrow" size={18} /></span>
+        </Link>
       </div>
       <div className="dash-tools">
         {TOOLS.map((t) => (

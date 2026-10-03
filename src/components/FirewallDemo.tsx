@@ -1,32 +1,28 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { reverse } from "@/lib/dna";
-import { money } from "@/lib/format";
-import { draftStore, thisMonth } from "@/lib/store";
+import { dur, money } from "@/lib/format";
+import { draftStore } from "@/lib/store";
 
 const OFFER = { monthly: 89, months: 36, deposit: 149, apr: 19.9, lateFee: 12 };
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function lastPayment(start: string, months: number) {
-  const [y, m] = start.split("-").map(Number);
-  const k = y * 12 + (m - 1) + months;
-  return `${MONTHS[k % 12]} ${Math.floor(k / 12)}`;
-}
-
-/** A pretend checkout showing the Commitment Firewall: a pause between "confirm" and the commitment. It never blocks. */
+/**
+ * Future-vision demo of the "Commitment Firewall": an optional companion card beside a checkout.
+ * It never blocks or intercepts. The person can dismiss it and carry on at any time.
+ */
 export function FirewallDemo() {
   const router = useRouter();
-  const dialog = useRef<HTMLDialogElement>(null);
-  const [done, setDone] = useState<null | "continued">(null);
-  const [last, setLast] = useState("");
-  const total = OFFER.monthly * OFFER.months;
-  const commitment = total + OFFER.deposit;
+  const [open, setOpen] = useState(true);
+  const [more, setMore] = useState(false);
+  const [ordered, setOrdered] = useState(false);
+  const payments = OFFER.monthly * OFFER.months;
+  const commitment = payments + OFFER.deposit;
   const credit = reverse(OFFER.monthly, OFFER.apr, [OFFER.months])[0];
-  const cashPrice = credit.principal + OFFER.deposit;
+  const borrowingCost = payments - credit.principal;
 
-  const explainFirst = () => {
+  const understand = () => {
     draftStore.set({ type: "loan", values: { amount: Math.round(credit.principal), apr: OFFER.apr, term: OFFER.months, fee: 0, lateFee: OFFER.lateFee }, example: false });
     router.push("/check?type=loan");
   };
@@ -41,37 +37,38 @@ export function FirewallDemo() {
             <p className="h3">Laptop Pro 14”</p>
             <p className="display" style={{ fontSize: 44 }}>£89<span className="lead" style={{ display: "inline" }}>/month</span></p>
             <p className="small muted">36 monthly payments. £149 deposit. Representative 19.9% APR (variable). Late payment fee £12.</p>
-            <button type="button" className="btn btn-dark" onClick={() => { setDone(null); setLast(lastPayment(thisMonth(), OFFER.months)); dialog.current?.showModal(); }}>Confirm purchase: £89/month</button>
-            {done && <p className="small" role="status">Demo order placed after reading the terms. Nothing was bought.</p>}
+            <button type="button" className="btn btn-dark" onClick={() => setOrdered(true)}>Confirm purchase: £89/month</button>
+            {ordered && <p className="small" role="status">Demo order placed. The companion never stopped you: it only offered the facts.</p>}
+            {!open && <button type="button" className="link small" onClick={() => setOpen(true)}>Show the Before You Sign card again</button>}
           </div>
         </div>
-      </div>
 
-      <dialog ref={dialog} className="commit" aria-labelledby="fw-title">
-        <div className="commit-head">
-          <span className="caption">Before You Sign check</span>
-          <button type="button" className="link small" onClick={() => dialog.current?.close()}>Close</button>
-        </div>
-        <div className="stack">
-          <h2 id="fw-title" className="h2">You’re about to commit to</h2>
-          <dl className="mlabel-rows">
-            <div><dt>£89 × 36 months</dt><dd>{money(total)}</dd></div>
-            <div><dt>Deposit</dt><dd>{money(OFFER.deposit)}</dd></div>
-            <div className="strong"><dt>Actual commitment</dt><dd>{money(commitment)}</dd></div>
-            <div><dt>Cash price, worked out from the APR</dt><dd>about {money(cashPrice)}</dd></div>
-            <div><dt>Last payment</dt><dd>{last}</dd></div>
-          </dl>
-          <ul className="mlabel-notes">
-            <li><span aria-hidden="true" className="mark warn">!</span>Variable APR: your payments could change</li>
-            <li><span aria-hidden="true" className="mark warn">!</span>£12 charge for each late payment</li>
-          </ul>
-          <p className="small muted">Do you understand these terms? You can carry on either way. This check never decides for you.</p>
-          <div className="row">
-            <button type="button" className="btn btn-dark" onClick={explainFirst}>Explain it first</button>
-            <button type="button" className="btn btn-light" onClick={() => { setDone("continued"); dialog.current?.close(); }}>Continue</button>
-          </div>
-        </div>
-      </dialog>
+        {open && (
+          <aside className="companion" aria-label="Before You Sign companion (optional)">
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <span className="caption">Before you sign…</span>
+              <button type="button" className="link small" onClick={() => setOpen(false)} aria-label="Dismiss the Before You Sign card">Dismiss</button>
+            </div>
+            <p className="h3">£89 a month is the headline.</p>
+            <dl className="mlabel-rows">
+              <div><dt>Commitment</dt><dd>{dur(OFFER.months)}</dd></div>
+              <div><dt>Total payments, with deposit</dt><dd>{money(commitment)}</dd></div>
+              <div><dt>Borrowing cost, worked out from the APR</dt><dd>about {money(borrowingCost)}</dd></div>
+            </dl>
+            {more && (
+              <ul className="mlabel-notes">
+                <li><span aria-hidden="true" className="mark warn">!</span>Variable APR: your payments could change</li>
+                <li><span aria-hidden="true" className="mark warn">!</span>£12 charge for each late payment</li>
+              </ul>
+            )}
+            <div className="row">
+              <button type="button" className="btn btn-dark btn-sm" onClick={understand}>Understand this commitment</button>
+              <button type="button" className="link small" onClick={() => setMore(!more)}>{more ? "Fewer details" : "Important conditions"}</button>
+            </div>
+            <p className="small muted">Optional. You can dismiss this and carry on whenever you like.</p>
+          </aside>
+        )}
+      </div>
     </div>
   );
 }
