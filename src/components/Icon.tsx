@@ -16,6 +16,8 @@ const PATHS: Record<string, string> = {
   calc: "M6 3h12v18H6zM9 7h6M9 11h.01M12 11h.01M15 11h.01M9 14h.01M12 14h.01M15 14h.01M9 17h.01M12 17h.01M15 17h.01",
   arrow: "M5 12h14M13 6l6 6-6 6",
   code: "M8 6l-6 6 6 6M16 6l6 6-6 6M14 4l-4 16",
+  car: "M3 16h18M5 16l2-6h10l2 6M6 16v3M18 16v3M7.5 13h.01M16.5 13h.01",
+  tool: "M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5l3 3 5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z",
   chevron: "M6 9l6 6 6-6",
   menu: "M4 7h16M4 12h16M4 17h16",
   close: "M6 6l12 12M18 6L6 18",

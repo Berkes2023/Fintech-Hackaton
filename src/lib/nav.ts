@@ -33,6 +33,8 @@ export const NAV: NavGroup[] = [
     label: "Tools",
     intro: "Simple tools that turn small print into understanding.",
     links: [
+      { href: "/start", title: "Not sure where to start?", desc: "Three quick questions", icon: "help" },
+      { href: "/plan", title: "Plan step by step", desc: "Car, home, borrowing or investing", icon: "spark" },
       { href: "/check", title: "Cost checker", desc: "Short-term and long-term cost in one view", icon: "calc" },
       { href: "/compare", title: "Compare options", desc: "Up to four products, side by side", icon: "compare" },
       { href: "/check#paste", title: "Read the small print", desc: "Paste the terms and AI fills in the form", icon: "doc" },

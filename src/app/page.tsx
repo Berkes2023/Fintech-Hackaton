@@ -1,7 +1,6 @@
-import Link from "next/link";
+import { Dashboard } from "@/components/Dashboard";
 import { HeroCard } from "@/components/HeroCard";
-import { Icon } from "@/components/Icon";
-import { EXAMPLES, PRODUCT_TYPES, PRODUCTS, simulate, type Metrics } from "@/lib/finance";
+import { EXAMPLES, simulate, type Metrics } from "@/lib/finance";
 
 const toLine = (m: Metrics) => ({
   total: m.total,
@@ -17,46 +16,19 @@ export default function Home() {
   return (
     <>
       <section className="sky">
-        <div className="container hero">
-          <span className="pill-label" style={{ background: "rgba(255,255,255,.18)", color: "#fff" }}>Money, explained</span>
-          <h1 className="display-xl">Know the real cost<br />before you sign</h1>
-          <p className="lead">
-            Put in a loan, credit card, overdraft, Buy Now Pay Later plan or bill. See what it costs now, what it costs in the end, and what could go wrong.
-          </p>
-          <div className="row" style={{ justifyContent: "center" }}>
-            <Link href="/check" className="btn btn-dark">Check a cost</Link>
-            <Link href="/compare" className="btn btn-ghost-photo">Compare options</Link>
-          </div>
-
-          <div className="hero-stage" aria-label="Example result">
-            <HeroCard fixed={toLine(card)} minOnly={toLine(minOnly)} />
-          </div>
+        <div className="container hero dash-hero">
+          <span className="pill-label" style={{ background: "rgba(255,255,255,.18)", color: "#fff" }}>Know the real cost before you sign</span>
+          <h1 className="display">What would you like to do?</h1>
+          <p className="lead">Pick one. We’ll take you through it a step at a time and show what it means for your money, before you commit.</p>
+          <Dashboard />
         </div>
       </section>
 
-      <section className="container section after-hero stack" style={{ gap: 32 }}>
-        <div className="stack" style={{ maxWidth: 760 }}>
-          <h2 className="h1 section-title">Six kinds of commitment. One clear view of each.</h2>
-        </div>
-        <div className="product-tiles">
-          {PRODUCT_TYPES.map((t) => (
-            <Link key={t} href={`/check?type=${t}`} className="product-tile">
-              <span className="icon"><Icon name={t} size={22} /></span>
-              <b>{PRODUCTS[t].label}</b>
-              <span className="small muted">{PRODUCTS[t].blurb}</span>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section className="container section" style={{ paddingTop: 0 }}>
-        <div className="list stack" style={{ gap: 32, padding: "40px clamp(24px, 4vw, 56px)" }}>
-          <h2 className="h1">From small print to understanding in three steps</h2>
-          <ol className="steps">
-            <li><p className="h3">Enter the details</p><p className="muted" style={{ marginTop: 8 }}>Type in the figures from the advert, or paste the terms and let AI fill in the form for you to check.</p></li>
-            <li><p className="h3">See the real cost</p><p className="muted" style={{ marginTop: 8 }}>Short-term and long-term cost, a plain-English summary, a chart of every payment, and the risks to check.</p></li>
-            <li><p className="h3">Compare and decide</p><p className="muted" style={{ marginTop: 8 }}>Line up to four options side by side. We show the facts. The choice stays with you.</p></li>
-          </ol>
+      <section className="container section stack" style={{ gap: 24, justifyItems: "center", textAlign: "center" }}>
+        <span className="caption">See it in action</span>
+        <h2 className="h1" style={{ maxWidth: 720 }}>A £1,200 credit card, made clear</h2>
+        <div className="hero-stage" style={{ marginBottom: 0 }} aria-label="Example result">
+          <HeroCard fixed={toLine(card)} minOnly={toLine(minOnly)} />
         </div>
       </section>
 
@@ -75,7 +47,7 @@ export default function Home() {
             <div className="card stack">
               <span className="caption">Your data</span>
               <p className="h3">Stays with you</p>
-              <p className="muted">No sign-up and no bank connection. Your figures are calculated in your browser and saved only on your device.</p>
+              <p className="muted">No sign-up and no bank connection. Your figures are worked out in your browser and saved only on your device.</p>
             </div>
             <div className="card stack">
               <span className="caption">AI, responsibly</span>
@@ -83,16 +55,6 @@ export default function Home() {
               <p className="muted">Every number comes from transparent maths. AI only explains and reads small print, and every AI answer is marked.</p>
             </div>
           </div>
-        </div>
-      </section>
-
-      <section className="container section">
-        <div className="row" style={{ justifyContent: "space-between", gap: 24 }}>
-          <div className="stack" style={{ maxWidth: 640 }}>
-            <h2 className="display">Paying for a £1,200 laptop?</h2>
-            <p className="lead muted">Pay in 3, a credit card or store finance. See every cost side by side before you choose.</p>
-          </div>
-          <Link href="/compare" className="btn btn-dark">See the comparison <Icon name="arrow" size={18} /></Link>
         </div>
       </section>
     </>

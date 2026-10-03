@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { EXAMPLES, isProductType, type ProductType, type SavedOption, type Values } from "./finance";
+import { DEFAULT_SITUATION, type Situation } from "./journey";
 
 // Everything here lives in this browser's localStorage only. Nothing is sent to a server.
 
@@ -58,3 +59,9 @@ export function thisMonth(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
+
+/** The guided journey's answers, so a refresh doesn't lose them. Browser-only. */
+export const journeyStore = createStore<Situation>("bys:journey", DEFAULT_SITUATION, (x): x is Situation => {
+  const s = x as Situation;
+  return !!s && typeof s === "object" && typeof s.goal === "string" && typeof s.price === "number" && typeof s.housing === "number" && Array.isArray(s.changes) && !!s.invest;
+});
