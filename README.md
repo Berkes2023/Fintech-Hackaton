@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Before You Sign
 
-## Getting Started
+**Know the real cost before you sign.** A prototype for the UKFinnovator Bristol 2026 hackathon, challenge *“Money, Explained: Making Financial Decisions Easier”*.
 
-First, run the development server:
+Enter a loan, credit card, overdraft, Buy Now Pay Later plan, subscription or household bill. Before You Sign shows:
+
+- **The cost:** regular payment, first three months, total you pay and the cost of borrowing.
+- **A plain-English explanation** of what you’re agreeing to, plus a jargon buster.
+- **Risks to check**, ranked: minimum-payment traps, the FCA “persistent debt” test, 0% offers ending, late fees, price rises and exit fees.
+- **A chart** of everything you pay over time, against what you borrowed.
+- **A side-by-side comparison** of up to four options.
+- **An optional AI assistant** that answers questions and reads pasted small print to fill in the form. It explains and never recommends.
+
+> Not financial advice. Not connected to any bank. Figures are estimates from what you enter.
+
+## Run it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # add your ANTHROPIC_API_KEY to turn on the AI features
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Without an API key everything works except the two AI features, which say they’re switched off.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | Local dev server |
+| `npm run check` | Lint, typecheck and unit tests |
+| `npm run build` | Production build (what Vercel runs) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## How it’s built
 
-## Learn More
+- **Next.js 16** (App Router) + **TypeScript**, plain CSS design tokens in a Revolut-style monochrome system with a mega-menu header.
+- **`src/lib/finance.ts`**: all money maths as pure, tested functions (annuity repayments, card minimum payments, overdraft EAR, BNPL instalments, subscription and contract price rises).
+- **`src/app/api/explain`** and **`src/app/api/extract`**: Claude (`claude-opus-5-5`) via the Anthropic SDK. Chat answers stream; extraction uses structured JSON output. Inputs are size-capped and pasted text is treated as data.
+- **Privacy:** figures and comparisons are stored only in the browser (localStorage).
 
-To learn more about Next.js, take a look at the following resources:
+## Responsible design
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Every number comes from transparent maths, never the model. AI is optional, labelled, told never to recommend, and points people to MoneyHelper and StepChange when money worries come up. See `/responsible-ai` in the app.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Working with Claude Code
 
-## Deploy on Vercel
+The `.claude/` folder holds team settings, slash commands (`/review`, `/fix-issue`, `/deploy`), rules, skills and subagents. Start with `CLAUDE.md`. Put personal notes in `CLAUDE.local.md` (gitignored).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+CLAUDE.md                 team instructions (committed)
+CLAUDE.local.md           personal overrides (gitignored)
+.claude/
+  settings.json           permissions + config (committed)
+  settings.local.json     personal permissions (gitignored)
+  commands/               review · fix-issue · deploy
+  rules/                  code-style · testing · api-conventions
+  skills/                 security-review · deploy
+  agents/                 code-reviewer · security-auditor
+```
