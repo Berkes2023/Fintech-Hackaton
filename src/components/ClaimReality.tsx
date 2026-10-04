@@ -1,5 +1,6 @@
 import { dur, money } from "@/lib/format";
 import { crossCheck, type Metrics } from "@/lib/finance";
+import { SourceBadge } from "./CarParts";
 
 interface Props {
   claim: string;
@@ -22,16 +23,16 @@ export function ClaimReality({ claim, m, credit, missing, stated, onShow }: Prop
       {claim && (
         <div className="claim-grid">
           <div className="claim-see">
-            <span className="caption">What the advert says</span>
+            <span className="caption">What the advert says <SourceBadge source="document_says" /></span>
             <p className="claim-quote">“{claim}”</p>
             <button type="button" className="link small" onClick={() => onShow("claim")}>Show me where</button>
           </div>
           <div className="claim-real">
-            <span className="caption">What it adds up to</span>
+            <span className="caption">What it adds up to <SourceBadge source="we_calculated" /></span>
             {missing.length ? (
               <>
                 <p className="claim-big">Can’t tell yet</p>
-                <p className="small">The advert doesn’t say the {missing.join(", ").toLowerCase()}, so the total can’t be worked out. Ask before you commit.</p>
+                <p className="small">The advert doesn’t say the {missing.map((l) => l.charAt(0).toLowerCase() + l.slice(1)).join(", ")}, so the total can’t be worked out. Ask before you commit.</p>
               </>
             ) : (
               <>

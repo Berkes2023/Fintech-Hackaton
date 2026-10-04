@@ -5,20 +5,21 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FEEL, MIND, suggest, WHEN, type Answers, type Feel, type Mind, type When } from "@/lib/guide";
 import { GOALS, type Goal } from "@/lib/journey";
+import { scrollMotion } from "@/lib/motion";
 import { journeyStore } from "@/lib/store";
 import { Icon } from "./Icon";
 import { startGoal } from "./Journey";
 
 type Q = "mind" | "buy" | "feel" | "when" | "done";
 
-/** For people who don't know where to start: a few gentle questions, then places in the app to begin. */
+/** For people who don't know where to start: a few quick questions, then a route into Plan (or another place in the app). It only routes. */
 export function StartGuide() {
   const [a, setA] = useState<Answers>({});
   const [q, setQ] = useState<Q>("mind");
   const router = useRouter();
   const order: Q[] = a.mind === "buy" ? ["mind", "buy", "feel", "when", "done"] : ["mind", "feel", "done"];
   const idx = order.indexOf(q);
-  const answer = (patch: Answers, next: Q) => { setA((x) => ({ ...x, ...patch })); setQ(next); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const answer = (patch: Answers, next: Q) => { setA((x) => ({ ...x, ...patch })); setQ(next); window.scrollTo({ top: 0, behavior: scrollMotion() }); };
   const back = () => setQ(order[Math.max(0, idx - 1)]);
   // The guide only routes: borrowing decisions go into Plan (situation and credit first); saving uses its simple wizard.
   const openGoal = (g: Goal) => {
@@ -37,7 +38,7 @@ export function StartGuide() {
       {q === "mind" && (
         <section className="stack journey-card">
           <h2 className="h1">What’s on your mind?</h2>
-          <p className="muted">There’s no wrong answer. This just helps us show you a good place to start.</p>
+          <p className="muted">There’s no wrong answer. This just helps us point you to the right place to start.</p>
           <div className="choice-grid">
             {(Object.keys(MIND) as Mind[]).map((m) => <Choice key={m} label={MIND[m]} on={a.mind === m} onClick={() => answer({ mind: m }, m === "buy" ? "buy" : "feel")} />)}
           </div>
@@ -61,7 +62,7 @@ export function StartGuide() {
       {q === "feel" && (
         <section className="stack journey-card">
           <h2 className="h1">How does your money feel right now?</h2>
-          <p className="muted">Honest answers help. Nothing is saved or shared.</p>
+          <p className="muted">Honest answers help. Nothing here is shared.</p>
           <div className="choice-grid">
             {(Object.keys(FEEL) as Feel[]).map((f) => <Choice key={f} label={FEEL[f]} on={a.feel === f} onClick={() => answer({ feel: f }, a.mind === "buy" ? "when" : "done")} />)}
           </div>
@@ -82,7 +83,7 @@ export function StartGuide() {
       {q === "done" && (
         <section className="stack journey-card">
           <span className="caption">Here’s where we’d start</span>
-          <h2 className="h1">A few good places to begin</h2>
+          <h2 className="h1">A few places to begin</h2>
           <p className="muted">These are places in Before You Sign that fit what you told us. They’re not financial products or advice, and you can go anywhere from here.</p>
           <div className="done-grid">
             {suggest(a).map((x) => {
@@ -94,7 +95,7 @@ export function StartGuide() {
           </div>
           <div className="wizard-nav">
             <button type="button" className="btn btn-light" onClick={back}>Back</button>
-            <button type="button" className="link small" onClick={() => { setA({}); setQ("mind"); }}>Start again</button>
+            <button type="button" className="link small quiet" onClick={() => { setA({}); setQ("mind"); }}>Start again</button>
           </div>
         </section>
       )}

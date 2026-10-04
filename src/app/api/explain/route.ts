@@ -25,9 +25,9 @@ function parse(body: unknown): { context: string; turns: Turn[] } | null {
 const STATUS = { rate_limited: 429, timeout: 504, bad_request: 400, model_unavailable: 502, upstream: 502 } as const;
 
 export async function POST(req: Request) {
-  if (!aiConfigured()) return Response.json({ error: "not_configured" }, { status: 503 });
+  if (!aiConfigured()) return Response.json({ error: "not_configured" }, { status: 503, headers: MODEL_HEADER });
   const input = parse(await req.json().catch(() => null));
-  if (!input) return Response.json({ error: "bad_request" }, { status: 400 });
+  if (!input) return Response.json({ error: "bad_request" }, { status: 400, headers: MODEL_HEADER });
 
   // Gemini uses "user" / "model" roles. The page data rides along in the first user turn.
   const contents: Content[] = input.turns.map((t, i) => ({

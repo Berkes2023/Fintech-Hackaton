@@ -1,4 +1,4 @@
-// Every statistic shown on the home page, in one place, each checked against its official source on 4 October 2026.
+// Every statistic we cite, in one place, each checked against its official source on 4 October 2026.
 // Change a figure here and it changes everywhere. Never add one without a source.
 
 export interface Stat {

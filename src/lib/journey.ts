@@ -1,12 +1,14 @@
+import { snapshot } from "./consequence";
 import { monthlyRate, type ProductType, type Values } from "./finance";
 import { money } from "./format";
+import { toMonthly, type FutureEvent, type Picture } from "./sim";
 
 // The guided wizards: start from someone's goal and real situation (including dated changes a bank can't see),
 // show example ways to pay, then simulate their own months. Explains; never ranks or recommends.
-// Every rate here is an ILLUSTRATIVE EXAMPLE, and every provider is fictional.
+// Every rate here is an ILLUSTRATIVE EXAMPLE, and every provider is fictional. The wizard takes no credit answer at
+// all (credit context lives in Plan), so no rate can depend on one: real lenders use their own criteria.
 
 export type Goal = "car" | "home" | "improve" | "borrow" | "purchase" | "education" | "invest";
-export type Tier = "excellent" | "good" | "fair" | "poor" | "unsure";
 export type ChangeKind = "in_once" | "out_once" | "income_change" | "cost_change" | "commitment_ends";
 export type Risk = "cash" | "cautious" | "balanced" | "adventurous";
 
@@ -14,7 +16,6 @@ export interface Change { id: string; kind: ChangeKind; label: string; amount: n
 
 export interface Situation {
   goal: Goal;
-  tier: Tier;
   price: number;
   deposit: number;
   /** Recurring money, each month. */
@@ -29,7 +30,7 @@ export interface Situation {
 }
 
 export const DEFAULT_SITUATION: Situation = {
-  goal: "car", tier: "good", price: 20000, deposit: 5000,
+  goal: "car", price: 20000, deposit: 5000,
   income: 2400, housing: 800, bills: 300, commitments: 250, savings: 3000, savingsRate: 4,
   changes: [
     { id: "c1", kind: "in_once", label: "Work bonus", amount: 3000, month: 1 },
@@ -49,14 +50,6 @@ export const GOALS: Record<Goal, { label: string; blurb: string; price: string; 
   invest: { label: "Save or invest", blurb: "See how money could grow", price: "", deposit: "", icon: "chart" },
 };
 
-export const TIERS: Record<Tier, { label: string; blurb: string }> = {
-  excellent: { label: "Excellent", blurb: "Always paid on time, little debt, long history" },
-  good: { label: "Good", blurb: "Mostly on time, manageable debt" },
-  fair: { label: "Fair", blurb: "A few late payments or a short history" },
-  poor: { label: "Poor", blurb: "Missed payments, defaults or CCJs" },
-  unsure: { label: "Not sure", blurb: "We’ll use ‘fair’ and show how it changes" },
-};
-
 export const CHANGE_KINDS: Record<ChangeKind, { label: string; hint: string; recurring: boolean; sign: 1 | -1 }> = {
   in_once: { label: "Money coming in once", hint: "Bonus, refund, gift, selling something", recurring: false, sign: 1 },
   out_once: { label: "A one-off cost", hint: "Holiday, car repair, Christmas", recurring: false, sign: -1 },
@@ -65,18 +58,50 @@ export const CHANGE_KINDS: Record<ChangeKind, { label: string; hint: string; rec
   commitment_ends: { label: "A payment stops from…", hint: "A loan, contract or subscription finishing", recurring: true, sign: 1 },
 };
 
-/** Illustrative example APRs by credit band. Not offers, not market data. */
-export const EXAMPLE_APR = {
-  loan: { excellent: 6.4, good: 9.9, fair: 15.9, poor: 29.9 },
-  hp: { excellent: 7.9, good: 10.9, fair: 16.9, poor: 27.9 },
-  pcp: { excellent: 8.9, good: 11.9, fair: 17.9, poor: 29.9 },
-  card: { excellent: 22.9, good: 24.9, fair: 29.9, poor: 34.9 },
-  mortgage: { excellent: 4.3, good: 4.6, fair: 5.4, poor: 7.9 },
-} as const;
+/**
+ * One illustrative example APR per kind of borrowing. Not offers, not market data, and never chosen by credit.
+ * The loan figure matches the 9.9% example used across Before You Sign.
+ */
+export const EXAMPLE_APR = { loan: 9.9, hp: 10.9, pcp: 11.9, card: 24.9, mortgage: 4.6 } as const;
 type Kind = keyof typeof EXAMPLE_APR;
-export const effectiveTier = (t: Tier): Exclude<Tier, "unsure"> => (t === "unsure" ? "fair" : t);
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
+
+/**
+ * The simplified wizard's money step, filled from the situation entered in Plan, so nobody types it twice.
+ * Built on the consequence engine's snapshot: housing is rent or mortgage; bills are every other essential cost
+ * plus other regular spending; commitments are debt repayments plus saving and pension; savings are cash savings.
+ */
+export function situationFromPicture(p: Picture): Pick<Situation, "income" | "housing" | "bills" | "commitments" | "savings"> {
+  const s = snapshot(p);
+  const rentItem = p.essentials.find((i) => i.id === "rent");
+  const housing = rentItem ? r2(toMonthly(rentItem.amount, rentItem.freq)) : 0;
+  return {
+    income: s.income,
+    housing,
+    bills: r2(s.essentials - housing + s.otherSpending),
+    commitments: r2(s.debt + s.commitments),
+    savings: s.buffer,
+  };
+}
+
+/**
+ * The simplified wizard's dated changes, from what the person told Plan: their future events and any debt with a
+ * known end. Never the wizard's example changes. A debt with endsIn = m is last paid in month m − 1, and future()
+ * stops counting a commitment_ends amount from its month, so the two line up.
+ */
+export function changesFromPlan(p: Picture, events: FutureEvent[]): Change[] {
+  const out: Change[] = events.map((e): Change => {
+    const base = { id: e.id, label: e.label, month: e.month };
+    if (e.recurrence === "one_off") return { ...base, kind: e.direction === "in" ? "in_once" : "out_once", amount: e.amount };
+    const amount = e.recurrence === "recurring_from" ? e.amount : -e.amount;
+    return { ...base, kind: e.direction === "in" ? "income_change" : "cost_change", amount };
+  });
+  for (const d of p.debts) {
+    if (d.endsIn && d.amount > 0) out.push({ id: `end-${d.id}`, kind: "commitment_ends", label: `End of ${d.label.toLowerCase()}`, amount: r2(toMonthly(d.amount, d.freq)), month: d.endsIn });
+  }
+  return out;
+}
 
 /* ---------- amortisation with an optional lump-sum overpayment ---------- */
 
@@ -161,10 +186,9 @@ const SPECS: Record<Exclude<Goal, "invest">, Spec[]> = {
 export interface OfferTweaks { termShift?: number; startDelay?: number }
 
 function buildOffer(spec: Spec, s: Situation, tw: OfferTweaks = {}): Offer {
-  const tier = effectiveTier(s.tier);
   const financed = Math.max(0, s.price - s.deposit);
   const ltvAdd = spec.kind === "mortgage" && s.goal === "home" && s.price > 0 && financed / s.price > 0.9 ? 0.6 : 0;
-  const apr = r2(EXAMPLE_APR[spec.kind][tier] + (spec.aprAdd ?? 0) + ltvAdd);
+  const apr = r2(EXAMPLE_APR[spec.kind] + (spec.aprAdd ?? 0) + ltvAdd);
   const months = Math.max(6, spec.months + (tw.termShift ?? 0));
   const delay = Array(tw.startDelay ?? 0).fill(0) as number[];
   const notes = spec.note ? [spec.note] : [];
@@ -173,7 +197,6 @@ function buildOffer(spec: Spec, s: Situation, tw: OfferTweaks = {}): Offer {
     if (s.price && financed / s.price > 0.95) notes.push("Most lenders need a deposit of at least 5%.");
   }
   if (spec.kind === "loan" && financed > 25000) notes.push("Most personal loans go up to about £25,000.");
-  if (tier === "poor") notes.push("With a poor credit score, fewer lenders may offer this.");
 
   if (spec.kind === "pcp") {
     const r = monthlyRate(apr);
@@ -219,17 +242,6 @@ export function offers(s: Situation, tw: OfferTweaks = {}): Offer[] {
     });
   }
   return out;
-}
-
-/** The same amount from a provider, at each credit score band. */
-export function creditImpact(s: Situation): { tier: Exclude<Tier, "unsure">; apr: number; monthly: number; total: number }[] {
-  const financed = Math.max(0, s.price - s.deposit);
-  const kind: Kind = s.goal === "home" ? "mortgage" : s.goal === "car" ? "hp" : "loan";
-  const months = s.goal === "home" ? 300 : 48;
-  return (["excellent", "good", "fair", "poor"] as const).map((tier) => {
-    const a = amortise(financed, EXAMPLE_APR[kind][tier], months);
-    return { tier, apr: EXAMPLE_APR[kind][tier], monthly: r2(a.payments[0] ?? 0), total: r2(a.total) };
-  });
 }
 
 /* ---------- the person's future months ---------- */

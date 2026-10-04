@@ -2,17 +2,21 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { dur, money, pct } from "@/lib/format";
 import {
-  applyLevers, CHANGE_KINDS, creditImpact, DEFAULT_SITUATION, effectiveTier, future, GOALS, growth, LEVERS, offers, RISK,
-  summarise, TIERS, type Change, type ChangeKind, type Goal, type Lever, type Offer, type Risk, type Situation, type Tier,
+  applyLevers, CHANGE_KINDS, DEFAULT_SITUATION, future, GOALS, growth, LEVERS, offers, RISK,
+  summarise, type Change, type ChangeKind, type Goal, type Lever, type Offer, type Risk, type Situation,
 } from "@/lib/journey";
-import { commitmentsStore, draftStore, journeyStore, MAX_SAVED, newOptionId, savedStore, thisMonth } from "@/lib/store";
+import { scrollMotion } from "@/lib/motion";
+import { hasEnteredPicture } from "@/lib/sim";
+import { carStore, commitmentsStore, draftStore, journeyStore, MAX_SAVED, newOptionId, savedStore, thisMonth } from "@/lib/store";
 import { Chart } from "./Chart";
 import { Icon } from "./Icon";
 
-const BORROW_STEPS = ["Goal", "Credit score", "The cost", "Your money", "Changes ahead", "Options", "Your future", "What if", "Before you sign", "Done"] as const;
+// "Credit context" keeps its place so step numbers in links (e.g. ?step=2 from Plan) stay the same. It's a short note:
+// credit context lives in Plan, and no rate here depends on it.
+const BORROW_STEPS = ["Goal", "Credit context", "The cost", "Your money", "Changes ahead", "Options", "Your future", "What if", "Before you sign", "Done"] as const;
 const INVEST_STEPS = ["Goal", "Your money", "Changes ahead", "Your plan", "Your future", "Done"] as const;
 type StepName = (typeof BORROW_STEPS)[number] | (typeof INVEST_STEPS)[number];
 
@@ -53,6 +57,9 @@ export function Journey() {
   const s = journeyStore.use();
   const set = (patch: Partial<Situation>) => journeyStore.set({ ...s, ...patch });
   const [step, setStep] = useState(() => Math.max(0, Number(params.get("step")) || 0));
+  // Arrived from Plan's goal step, with the money step filled from the situation entered there.
+  const planPicture = carStore.use().picture;
+  const fromPlan = params.get("from") === "plan" && hasEnteredPicture(planPicture);
   const [picked, setPicked] = useState<string | null>(null);
   const [levers, setLevers] = useState<Lever[]>([]);
   const [answer, setAnswer] = useState<number | null>(null);
@@ -67,9 +74,19 @@ export function Journey() {
   const invest = s.goal === "invest";
   const steps: readonly StepName[] = invest ? INVEST_STEPS : BORROW_STEPS;
   const name = steps[Math.min(step, steps.length - 1)];
-  const go = (n: number) => { setStep(Math.max(0, Math.min(n, steps.length - 1))); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const go = (n: number) => { setStep(Math.max(0, Math.min(n, steps.length - 1))); window.scrollTo({ top: 0, behavior: scrollMotion() }); };
   const next = () => go(step + 1);
   const back = () => go(step - 1);
+  // When the step changes (Next, Back, the progress bar), move focus to the new step's heading so keyboard and
+  // screen-reader users start at the new question. Compared with the last step, so the first render never steals focus.
+  const root = useRef<HTMLDivElement>(null);
+  const shownStep = useRef(name);
+  useEffect(() => {
+    if (shownStep.current === name) return;
+    shownStep.current = name;
+    const h = root.current?.querySelector<HTMLElement>("section h2");
+    if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); }
+  }, [name]);
 
   const goal = GOALS[s.goal];
   const financed = Math.max(0, s.price - s.deposit);
@@ -101,7 +118,7 @@ export function Journey() {
     : null;
 
   return (
-    <div className="journey">
+    <div className="journey" ref={root}>
       <ol className="journey-steps" aria-label="Progress">
         {steps.map((t, i) => (
           <li key={t} className={i === step ? "now" : i < step ? "done" : undefined}>
@@ -129,20 +146,12 @@ export function Journey() {
         </section>
       )}
 
-      {name === "Credit score" && (
+      {name === "Credit context" && (
         <section className="stack journey-card" aria-labelledby="q-credit">
-          <h2 id="q-credit" className="h1">How would you describe your credit score?</h2>
-          <p className="muted">Lenders use it to set the rate they offer, so it changes what the same {goal.label.toLowerCase()} costs.</p>
-          <div className="choice-grid">
-            {(Object.keys(TIERS) as Tier[]).map((t) => (
-              <button key={t} type="button" className={`choice${s.tier === t ? " on" : ""}`} onClick={() => { set({ tier: t }); next(); }}>
-                <b>{TIERS[t].label}</b>
-                <span className="small muted">{TIERS[t].blurb}</span>
-              </button>
-            ))}
-          </div>
-          <p className="small muted">You can check your credit report for free with the UK credit reference agencies. MoneyHelper explains how.</p>
-          <Nav back={back} />
+          <h2 id="q-credit" className="h1">Your credit context lives in Plan</h2>
+          <p className="muted">The ways to pay here use illustrative rates from fictional providers. They don’t change with your credit history: only a lender can tell you the rate it would offer.</p>
+          <p className="small muted">To understand your credit context, use <Link href="/plan?step=7" className="link">the credit step in Plan</Link>. You can check your credit report for free with the UK credit reference agencies.</p>
+          <Nav back={back} next={next} />
         </section>
       )}
 
@@ -162,7 +171,9 @@ export function Journey() {
       {name === "Your money" && (
         <section className="stack journey-card" aria-labelledby="q-money">
           <h2 id="q-money" className="h1">Your money in a normal month</h2>
-          <p className="muted">Rough figures are fine. They stay in your browser and are never sent anywhere.</p>
+          {fromPlan
+            ? <p className="muted"><b>Using the situation you gave in Plan.</b> Change anything that’s different for this goal. Rough figures are fine. They’re saved in this browser, not on our servers.</p>
+            : <p className="muted">Rough figures are fine. They’re saved in this browser, not on our servers.</p>}
           <div className="journey-fields">
             <Money id="j-income" label="Take-home pay" value={s.income} onChange={(income) => set({ income })} />
             <Money id="j-housing" label="Rent or mortgage" value={s.housing} onChange={(housing) => set({ housing })} />
@@ -190,7 +201,7 @@ export function Journey() {
                 <div className="field"><label htmlFor={`l-${c.id}`}>What</label><div className="input"><input id={`l-${c.id}`} value={c.label} onChange={(e) => updateChange(c.id, { label: e.target.value })} style={{ fontFamily: "inherit" }} /></div></div>
                 <Money id={`a-${c.id}`} label={CHANGE_KINDS[c.kind].recurring ? "Amount each month" : "Amount"} value={c.amount} onChange={(amount) => updateChange(c.id, { amount })} allowNegative={c.kind === "income_change" || c.kind === "cost_change"} />
                 <div className="field"><label htmlFor={`m-${c.id}`}>When</label><div className="input"><select id={`m-${c.id}`} value={c.month} onChange={(e) => updateChange(c.id, { month: Number(e.target.value) })}>{Array.from({ length: 24 }, (_, i) => i + 1).map((m) => <option key={m} value={m}>{monthName(start, m)}</option>)}</select></div></div>
-                <button type="button" className="link small" onClick={() => set({ changes: s.changes.filter((x) => x.id !== c.id) })}>Remove</button>
+                <button type="button" className="link small" aria-label={`Remove ${c.label || "this change"}`} onClick={() => set({ changes: s.changes.filter((x) => x.id !== c.id) })}>Remove</button>
               </li>
             ))}
           </ul>
@@ -204,7 +215,7 @@ export function Journey() {
       {name === "Options" && (
         <section className="stack" style={{ gap: 20 }} aria-labelledby="q-options">
           <h2 id="q-options" className="h1">Ways to pay for it</h2>
-          <p className="muted">Borrowing {money(financed)} with a {TIERS[s.tier].label.toLowerCase()} credit score{s.tier === "unsure" ? " (shown as fair)" : ""}. Choose one to see it in your life. Which suits you is your call.</p>
+          <p className="muted">Borrowing {money(financed)}. Choose one to see it in your life. Which suits you is your call.</p>
           <p className="estimate-note small"><b>Example offers from fictional providers, at illustrative rates.</b> Real offers depend on the lender and your full application. Nothing here is a quote or advice.</p>
           {os.length === 0 ? <p className="list">Nothing to borrow: your deposit covers the price.</p> : (
             <div className="option-grid">
@@ -230,19 +241,6 @@ export function Journey() {
               <p className="list small">{lowTotal.provider} has the lowest total cost but a higher monthly payment. {lowMonthly.provider} has the lowest monthly payment, but you pay {money(lowMonthly.total - lowTotal.total)} more overall.</p>
             ) : null;
           })()}
-          {financed > 0 && (
-            <details className="list">
-              <summary style={{ cursor: "pointer", fontWeight: 600 }}>What your credit score changes</summary>
-              <div className="table-wrap" style={{ marginTop: 12 }}>
-                <table className="cmp">
-                  <thead><tr><th scope="col">Credit score</th><th scope="col">Example APR</th><th scope="col">Each month</th><th scope="col">Total</th></tr></thead>
-                  <tbody>{creditImpact(s).map((r) => (
-                    <tr key={r.tier} className={r.tier === effectiveTier(s.tier) ? "priority" : undefined}><th scope="row">{TIERS[r.tier].label}{r.tier === effectiveTier(s.tier) ? " · you" : ""}</th><td>{pct(r.apr)}</td><td>{money(r.monthly, true)}</td><td>{money(r.total)}</td></tr>
-                  ))}</tbody>
-                </table>
-              </div>
-            </details>
-          )}
           <Nav back={back} next={next} label="See it in my life" disabled={!chosen} />
         </section>
       )}
@@ -410,11 +408,11 @@ export function Journey() {
           {!invest && chosen && <p className="lead muted">{chosen.provider}: {chosen.product}. {chosen.regular ? `${money(chosen.regular, true)} a month for ${dur(chosen.months)}, ` : ""}{money(chosen.total)} in total. A normal month would leave about {money(sum.typicalNormal)}.</p>}
           {invest && <p className="lead muted">{money(s.invest.monthly)} a month into {RISK[s.invest.risk].label.toLowerCase()} for {s.invest.years} years. The choice, and any provider, is yours.</p>}
           <div className="done-grid">
-            {!invest && <Link href="/small-print" className="done-card"><Icon name="doc" /><b>Got a real offer?</b><span className="small muted">Decode it and see the small print</span></Link>}
-            {!invest && chosen?.checker && <button type="button" className="done-card" onClick={() => toChecker(chosen)}><Icon name="calc" /><b>Full breakdown</b><span className="small muted">Money Label, risks and digital twin</span></button>}
+            {!invest && <Link href="/small-print" className="done-card"><Icon name="doc" /><b>Got a real offer?</b><span className="small muted">Read the small print: what it says and what it costs</span></Link>}
+            {!invest && chosen?.checker && <button type="button" className="done-card" onClick={() => toChecker(chosen)}><Icon name="calc" /><b>Open in the cost checker</b><span className="small muted">Money Label, costs over time and risks</span></button>}
             {!invest && chosen?.checker && <button type="button" className="done-card" onClick={() => toCompare(chosen)}><Icon name="compare" /><b>Add to Compare</b><span className="small muted">Line it up with other options</span></button>}
             {!invest && chosen?.checker && <button type="button" className="done-card" onClick={() => toCommitments(chosen)}><Icon name="chart" /><b>Add to my commitments</b><span className="small muted">See it next to what you already pay</span></button>}
-            <Link href="/" className="done-card"><Icon name="spark" /><b>Plan something else</b><span className="small muted">Back to the start</span></Link>
+            <Link href="/plan" className="done-card"><Icon name="spark" /><b>Plan something else</b><span className="small muted">Back to Plan</span></Link>
           </div>
           {msg && <p className="small" role="status">{msg}</p>}
           <button type="button" className="link small quiet" onClick={() => { if (!window.confirm("Clear your answers and start again?")) return; journeyStore.set(DEFAULT_SITUATION); setPicked(null); setLevers([]); go(0); }}>Clear my answers</button>

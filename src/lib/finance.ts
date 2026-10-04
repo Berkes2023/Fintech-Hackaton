@@ -284,7 +284,7 @@ export function explain(type: ProductType, v: Values, m: Metrics): string[] {
   const b = (x: string) => `**${x}**`;
   if (type === "loan") {
     P.push(`You borrow ${b(money(m.principal))} and pay ${b(money(m.regular, true))} every month for ${dur(n(v.term))}.`);
-    P.push(`By the end you will have paid back ${b(money(m.total))}. That is ${money(m.onTop)} more than you borrowed${n(v.fee) ? `, including a ${money(n(v.fee))} fee at the start` : ""}.`);
+    P.push(`If you make every payment, you’d pay back ${b(money(m.total))} in total. That’s ${money(m.onTop)} more than you borrowed${n(v.fee) ? `, including a ${money(n(v.fee))} fee at the start` : ""}.`);
     if (m.principal > 0) P.push(`Each £1 you borrow costs you about ${Math.round((m.onTop / m.principal) * 100)}p on top. A shorter term means bigger monthly payments but less interest overall.`);
   }
   if (type === "card") {
@@ -392,9 +392,9 @@ export function risks(type: ProductType, v: Values, m: Metrics, spare = 0): Risk
   if (spare > 0) {
     const monthly = monthlyEquivalent(type, v, m);
     const share = monthly / spare;
-    if (share > 1) add("high", "More than your spare money", `About ${money(monthly)} a month is more than the ${money(spare)} you have left after bills.`);
-    else if (share > 0.3) add("watch", "A big share of your spare money", `About ${money(monthly)} a month is ${Math.round(share * 100)}% of what you have left after bills. Think about what happens if costs go up.`);
-    else add("info", "Fits within your spare money", `About ${money(monthly)} a month is ${Math.round(share * 100)}% of what you have left after bills.`);
+    // No invented thresholds and no verdict: the share of what's left, stated plainly.
+    if (share > 1) add("high", "More than what’s left after bills", `About ${money(monthly)} a month is more than the ${money(spare)} you have left after bills.`);
+    else add("info", "Share of what’s left after bills", `About ${money(monthly)} a month is ${Math.round(share * 100)}% of the ${money(spare)} you have left after bills.`);
   }
   const order: Record<RiskLevel, number> = { high: 0, watch: 1, info: 2 };
   return R.sort((a, b) => order[a.lvl] - order[b.lvl]);

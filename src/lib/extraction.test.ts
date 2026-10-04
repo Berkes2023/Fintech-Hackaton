@@ -26,16 +26,21 @@ describe("extraction validation", () => {
   it("fills safe defaults and drops malformed items instead of crashing", () => {
     const r = validateExtraction({
       product: "bnpl",
-      values: [{ id: "price" }, "junk", { id: "n", value: "3", confidence: "certain" }],
+      values: [{ id: "price" }, "junk", { id: "n", value: "3", quote: "3 payments", confidence: "certain" }, { id: "apr", value: "29.9", quote: "  " }],
       conditions: [{ title: "No quote" }, { kind: "made_up", title: "Late fee", quote: "£5 per missed payment" }],
       prominence: { monthly_payment: "huge" },
     });
-    expect(r?.values).toEqual([{ id: "n", value: "3", quote: "", confidence: "medium" }]);
+    expect(r?.values).toEqual([{ id: "n", value: "3", quote: "3 payments", confidence: "medium" }]);
     expect(r?.conditions).toHaveLength(1);
     expect(r?.conditions[0].kind).toBe("other");
     expect(r?.prominence?.monthly_payment).toBe("absent");
     expect(r?.stated).toEqual({ monthly: "", monthly_quote: "", total: "", total_quote: "" });
     expect(r?.contradictions).toEqual([]);
+  });
+
+  it("drops values that don't show the words they came from", () => {
+    const r = validateExtraction({ product: "loan", values: [{ id: "apr", value: "29.9", quote: "", confidence: "high" }, { id: "term", value: "36", confidence: "high" }] });
+    expect(r?.values).toEqual([]);
   });
 
   it("strips additionalProperties at every depth for Gemini", () => {

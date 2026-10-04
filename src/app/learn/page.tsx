@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CONCEPTS } from "@/lib/concepts";
+import { CRA_LABEL, CRA_ORDER, CURRENT_SCALE, SCALES } from "@/lib/credit";
 import { GLOSSARY, PRODUCT_TYPES, PRODUCTS } from "@/lib/finance";
 
 export const metadata: Metadata = { title: "Learn" };
@@ -52,6 +53,33 @@ export default function LearnPage() {
         <h2 id="bills" className="h2 anchor-target">Subscriptions and household contracts</h2>
         <p>
           Introductory prices rise automatically unless you cancel. Phone and broadband contracts often include yearly price rises. Since January 2025, Ofcom rules mean these must be shown in pounds and pence. Leaving a contract early can cost close to the remaining payments.
+        </p>
+
+        <h2 id="credit" className="h2 anchor-target">Credit scores in the UK</h2>
+        <p>Three credit reference agencies each publish their own score, on their own scale:</p>
+        <ul>
+          {CRA_ORDER.map((c) => {
+            const s = SCALES[CURRENT_SCALE[c]];
+            const older = Object.values(SCALES).filter((o) => o.cra === c && o.id !== s.id);
+            return <li key={c}><b>{CRA_LABEL[c]}</b>: {s.min}–{s.max}{older.map((o) => ` (older scale ${o.min}–${o.max})`).join("")}{s.note ? `. ${s.note}` : ""}</li>;
+          })}
+        </ul>
+        <p>
+          <b>There isn’t one universal UK credit score.</b> Each agency uses its own information and method, so the same person can see different numbers. Lenders also use their own criteria, so no score tells you what a lender will decide.
+        </p>
+        <details className="why" style={{ marginTop: 12 }}>
+          <summary>What shapes a credit profile?</summary>
+          <ul>
+            <li><b>Payment history</b>: whether bills and repayments are paid on time.</li>
+            <li><b>Credit utilisation</b>: how much of your available credit you’re using.</li>
+            <li><b>Recent applications</b>: how often you’ve applied for credit lately.</li>
+            <li><b>Length of credit history</b>: how long you’ve had credit accounts.</li>
+            <li><b>Existing borrowing</b>: the loans, cards and other credit you already have.</li>
+            <li><b>Report indicators</b>: things like defaults, County Court Judgments or being on the electoral roll.</li>
+          </ul>
+        </details>
+        <p>
+          Before You Sign never calculates or predicts an official score, and never predicts lender approval. In <Link href="/plan">Plan</Link>, you can enter the scores you know or build our clearly labelled educational estimate, and see it next to your whole financial situation.
         </p>
 
         <h2 id="misconceptions" className="h2 anchor-target">Common misconceptions</h2>

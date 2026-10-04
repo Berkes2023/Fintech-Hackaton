@@ -25,7 +25,7 @@ export function CommitmentMap() {
   if (!list.length) {
     return (
       <div className="list stack" style={{ justifyItems: "start" }}>
-        <p>Your map is empty. Add things you already pay from the cost checker (“I already pay this”), or load an example.</p>
+        <p>Your map is empty. Add things you already pay from the cost checker (“I already pay this”), add the car you’re exploring from the Plan summary, or load an example.</p>
         <div className="row">
           <Link href="/cost-checker" className="btn btn-dark">Open the cost checker</Link>
           <button type="button" className="btn btn-light" onClick={() => commitmentsStore.set(EXAMPLE.map((e) => ({ ...e, id: newOptionId() })))}>Load an example</button>
@@ -53,7 +53,7 @@ export function CommitmentMap() {
                 <span className={`gantt-bar${i.ongoing ? " ongoing" : ""}`} style={{ width: `${Math.max(2, ((i.months ?? map.horizon) / map.horizon) * 100)}%` }} />
               </span>
               <span className="gantt-end small">{i.ongoing && i.c.type === "subscription" ? "Ongoing" : i.months === null ? "Never cleared" : `Ends ${endDate(start, i.months)} · ${dur(i.months)}`}</span>
-              <button type="button" className="link small" onClick={() => commitmentsStore.set(list.filter((x) => x.id !== i.c.id))}>Remove</button>
+              <button type="button" className="link small" aria-label={`Remove ${i.c.name}`} onClick={() => commitmentsStore.set(list.filter((x) => x.id !== i.c.id))}>Remove</button>
             </li>
           ))}
         </ul>

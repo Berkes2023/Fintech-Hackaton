@@ -9,7 +9,7 @@ export default function StressTestPage() {
       <div className="stack" style={{ maxWidth: 760, gap: 8 }}>
         <span className="caption">Stress test your month</span>
         <h1 className="display">What if something changed?</h1>
-        <p className="lead muted">See how your month and your savings would look if bills rose, income fell or something unexpected happened.</p>
+        <p className="lead muted">Using the situation you gave in Plan, see how your month, your savings and your commitments would look if bills rose, income fell or something unexpected happened.</p>
       </div>
       <StressMonth />
     </div>

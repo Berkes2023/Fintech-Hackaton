@@ -64,7 +64,7 @@ export function WhatIf({ type, v, base, onApply }: { type: ProductType; v: Value
         {knob && dial !== null && dial !== current && (
           <button type="button" className="btn btn-light btn-sm" onClick={() => { onApply(knob.id, dial); setDial(null); }}>Use {knob.unit(dial)} in my figures</button>
         )}
-        {(dial !== null || extra > 0) && <button type="button" className="link small" onClick={() => { setDial(null); setExtra(0); }}>Reset</button>}
+        {(dial !== null || extra > 0) && <button type="button" className="link small quiet" onClick={() => { setDial(null); setExtra(0); }}>Reset</button>}
       </div>
     </section>
   );

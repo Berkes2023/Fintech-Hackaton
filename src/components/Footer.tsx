@@ -32,9 +32,8 @@ export function Footer() {
           <nav className="footer-legal" aria-label="Legal">
             <Link href="/privacy">Privacy policy</Link>
             <Link href="/terms">Terms &amp; conditions</Link>
-            <Link href="/#sources">Sources &amp; methodology</Link>
+            <Link href="/about#sources">Sources &amp; methodology</Link>
             <Link href="/about">About</Link>
-            <Link href="/about#privacy">Privacy &amp; your data</Link>
           </nav>
         </div>
       </div>

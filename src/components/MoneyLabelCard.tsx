@@ -39,7 +39,7 @@ export function MoneyLabelCard({ label, product, estimate }: { label: MoneyLabel
       {label.notes.length > 0 && (
         <ul className="mlabel-notes">
           {label.notes.map((n) => (
-            <li key={n.text}><span aria-hidden="true" className={`mark ${n.kind}`}>{n.kind === "warn" ? "!" : "✓"}</span><span className="sr-only">{n.kind === "warn" ? "Warning: " : "Good: "}</span>{n.text}</li>
+            <li key={n.text}><span aria-hidden="true" className={`mark ${n.kind}`}>{n.kind === "warn" ? "!" : "✓"}</span><span className="sr-only">{n.kind === "warn" ? "Warning: " : "Note: "}</span>{n.text}</li>
           ))}
         </ul>
       )}

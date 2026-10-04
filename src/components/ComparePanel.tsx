@@ -14,7 +14,7 @@ interface Row { o: SavedOption; m: Metrics; r: Risk[] }
 type Line = [label: string, fmt: (r: Row) => string, key?: (r: Row) => number];
 
 const PRIORITIES: { id: string; label: string; line: string }[] = [
-  { id: "monthly", label: "Monthly affordability", line: "Regular payment" },
+  { id: "monthly", label: "Monthly payment", line: "Regular payment" },
   { id: "total", label: "Total cost", line: "Total you pay" },
   { id: "length", label: "How long I’m tied in", line: "Time to finish" },
   { id: "extra", label: "Interest and fees", line: "Cost on top" },
@@ -88,8 +88,8 @@ export function ComparePanel() {
                   {r.o.name}
                   {r.o.example && <span className="pill-label" style={{ marginLeft: 8 }}>Example</span>}
                   <div className="row" style={{ marginTop: 8 }}>
-                    <button type="button" className="btn btn-light btn-sm" onClick={() => edit(r.o)}>Edit</button>
-                    <button type="button" className="link small" onClick={() => remove(r.o.id)}>Remove</button>
+                    <button type="button" className="btn btn-light btn-sm" aria-label={`Edit ${r.o.name}`} onClick={() => edit(r.o)}>Edit</button>
+                    <button type="button" className="link small" aria-label={`Remove ${r.o.name} from the comparison`} onClick={() => remove(r.o.id)}>Remove</button>
                   </div>
                 </th>
               ))}

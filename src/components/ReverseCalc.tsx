@@ -11,7 +11,7 @@ export function ReverseCalc() {
   const rows = reverse(Number(monthly) || 0, Number(apr) || 0);
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <div className="stress-inputs" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))", maxWidth: 640 }}>
+      <div className="stress-inputs" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", maxWidth: 640 }}>
         <div className="field"><label htmlFor="rv-m">Monthly amount</label><div className="input"><span>£</span><input id="rv-m" type="number" min={0} step={10} inputMode="decimal" value={monthly} onChange={(e) => setMonthly(e.target.value)} /></div></div>
         <div className="field"><label htmlFor="rv-a">Interest rate (APR)</label><div className="input"><input id="rv-a" type="number" min={0} step={0.1} inputMode="decimal" value={apr} onChange={(e) => setApr(e.target.value)} /><span>%</span></div></div>
       </div>

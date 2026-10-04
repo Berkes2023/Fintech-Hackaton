@@ -1,6 +1,6 @@
 import { isProductType, type ProductType } from "./finance";
 
-// Validates the AI's extraction before the UI sees it. Anything malformed is dropped or replaced with a safe empty
+// Validates the AI's extraction before the UI sees it. Anything malformed is dropped or replaced with an empty
 // value, so a bad model response can never crash the page or slip an invented field through.
 
 const CONFIDENCE = ["high", "medium", "low"] as const;
@@ -34,7 +34,8 @@ export function validateExtraction(raw: unknown): Extraction | null {
 
   const values = arr(r.values)
     .map((v) => { const o = obj(v); return { id: str(o.id, 40), value: str(o.value, 40), quote: str(o.quote, 300), confidence: oneOf(o.confidence, CONFIDENCE, "medium") }; })
-    .filter((v) => v.id && v.value);
+    // Every value must show the words it came from, like conditions below; a value with no quote is dropped.
+    .filter((v) => v.id && v.value && v.quote);
 
   const conditions = arr(r.conditions)
     .map((c) => { const o = obj(c); return { kind: oneOf(o.kind, CONDITION_KINDS, "other"), title: str(o.title, 120), plain: str(o.plain), why: str(o.why), quote: str(o.quote, 300), confidence: oneOf(o.confidence, CONFIDENCE, "medium") }; })

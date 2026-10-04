@@ -6,25 +6,34 @@ import { SourceBadge } from "./CarParts";
 
 export interface Change { label: string; before: string; after: string }
 export interface Explore { label: string; onClick: () => void }
+/** One labelled figure, e.g. from paymentFigures() in lib/consequence.ts. */
+export interface Figure { label: string; value: string }
 
 /**
- * The product's core pattern. Every important number answers: what is it, what does it mean, what does it change
- * for this person, and what could they change? The sentences come from the consequence engine (lib/consequence.ts).
+ * The product's core pattern. Every important number answers: what is it, what are the numbers behind it, what could it
+ * mean for this person, and what could they change? The figures and sentences come from the consequence engine
+ * (lib/consequence.ts); this component only lays them out.
  */
-export function Consequence({ label, result, sub, means = [], changes = [], explore = [], children }: {
-  label: string; result: ReactNode; sub?: string; means?: string[]; changes?: Change[]; explore?: Explore[]; children?: ReactNode;
+export function Consequence({ label, result, sub, figures = [], means = [], changes = [], explore = [], children }: {
+  label: string; result: ReactNode; sub?: string; figures?: Figure[]; means?: string[]; changes?: Change[]; explore?: Explore[]; children?: ReactNode;
 }) {
   return (
-    <section className="conseq" aria-label={`${label}: what this means for you`}>
+    <section className="conseq" aria-label={`${label}: what this could mean for you`}>
       <div className="conseq-result">
         <span className="caption">{label} <SourceBadge source="we_calculated" /></span>
         <b>{result}</b>
         {sub && <span className="small">{sub}</span>}
       </div>
       <div className="conseq-body">
+        {figures.length > 0 && (
+          <div className="conseq-part">
+            <span className="caption">The numbers</span>
+            <dl className="mlabel-rows">{figures.map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>
+          </div>
+        )}
         {means.length > 0 && (
           <div className="conseq-part">
-            <span className="caption">What this means</span>
+            <span className="caption">What this could mean for you</span>
             <ul>{means.map((m) => <li key={m}>{m}</li>)}</ul>
           </div>
         )}

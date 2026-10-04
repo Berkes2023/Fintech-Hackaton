@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { strugglingWith } from "@/lib/concepts";
 import type { ProductType } from "@/lib/finance";
+import { redact } from "@/lib/privacy";
+import { SourceBadge } from "./CarParts";
 import { LearnNudge } from "./LearnNudge";
 
 interface Turn { role: "user" | "assistant"; content: string }
@@ -48,7 +50,11 @@ export function AskPanel({ type, context, hasDocument = false }: { type: Product
       const res = await fetch("/api/explain", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ context: context(), messages: next.slice(-8) }),
+        // Common personal details are removed in the browser first, from the page's figures and from every question.
+        body: JSON.stringify({
+          context: redact(context()).text,
+          messages: next.slice(-8).map((t) => (t.role === "user" ? { ...t, content: redact(t.content).text } : t)),
+        }),
         signal: ctl.current.signal,
       });
       if (!res.ok || !res.body) {
@@ -82,6 +88,7 @@ export function AskPanel({ type, context, hasDocument = false }: { type: Product
       </div>
       <p className="small muted">
         AI can explain these numbers and answer your questions. It sees only what’s on this page, and it won’t tell you whether to take the product.
+        Your question and the figures on this page are sent to Google Gemini. Please don’t include personal details.
       </p>
       <div className="chips">
         {(hasDocument ? ["Where does the document say the interest rate and fees?", ...CHIPS[type]] : CHIPS[type]).map((c) => <button key={c} type="button" className="chip" onClick={() => ask(c)} disabled={streaming !== null}>{c}</button>)}
@@ -91,7 +98,7 @@ export function AskPanel({ type, context, hasDocument = false }: { type: Product
         <div className="thread" aria-live="polite">
           {turns.map((t, i) => (
             <div key={i} className={`msg ${t.role === "user" ? "me" : "ai"}`}>
-              {t.role === "assistant" && <div className="ai-tag">AI-written · check against the provider’s documents</div>}
+              {t.role === "assistant" && <div className="ai-tag"><SourceBadge source="ai_explained" /> Check against the provider’s documents</div>}
               {t.content}
             </div>
           ))}

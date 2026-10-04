@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { money } from "./format";
-import { crossCheck, defaults, EXAMPLES, levers, moneyLabel, risks, scenarios, simulate, stressTest, twin, understandingCheck } from "./finance";
+import { crossCheck, defaults, EXAMPLES, explain, levers, moneyLabel, PRODUCT_TYPES, risks, scenarios, simulate, stressTest, twin, understandingCheck } from "./finance";
 
 const close = (a: number, b: number, tol = 0.02) => expect(Math.abs(a - b)).toBeLessThanOrEqual(tol);
 
@@ -195,6 +195,24 @@ describe("defaults", () => {
       const m = simulate(t, defaults(t));
       expect(Number.isFinite(m.total)).toBe(true);
       expect(m.s.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("plain-English explanation", () => {
+  it("states a loan's total as a condition, not a prediction", () => {
+    const v = { amount: 5000, apr: 12.9, term: 36, fee: 100 };
+    const m = simulate("loan", v);
+    const text = explain("loan", v, m).join(" ").replace(/\*\*/g, "");
+    expect(text).toContain(`If you make every payment, you’d pay back ${money(m.total)} in total.`);
+    expect(text).toContain("including a £100 fee at the start");
+  });
+
+  it("never predicts, recommends or gives a verdict, for any product", () => {
+    for (const t of PRODUCT_TYPES) {
+      const v = defaults(t);
+      const text = explain(t, v, simulate(t, v)).join(" ");
+      expect(text).not.toMatch(/you will have|recommend|you should|best|\bsafe\b|unsafe|afford/i);
     }
   });
 });
