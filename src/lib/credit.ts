@@ -329,13 +329,61 @@ export const scoreLine = (s: CraScore) => `${CRA_LABEL[s.creditProvider]} ${s.cr
 
 /** One honest line describing the credit context, for summaries. Scores are listed separately, never combined. */
 export function creditLine(c: CreditProfile): string {
-  const parts: string[] = [];
-  if (c.scores.length) parts.push(`${c.scores.map(scoreLine).join(" · ")}. Entered by you.`);
-  if (c.calculated && c.estimate) {
-    const r = creditEstimate(c.estimate);
-    if (r.ok) parts.push(`Before You Sign profile estimate: ${r.estimate.total}/100 (${r.estimate.bandLabel}). Educational, not an Experian, Equifax or TransUnion score.`);
+  const shown = displayedScores(c);
+  if (!shown.length) return "Not provided.";
+  const profile = profileTotal(c);
+  return shown.map((d) => `${CRA_LABEL[d.cra]} ${d.score} / ${d.max} (${d.kind === "entered" ? "entered by you" : "Before You Sign estimate"})`).join(" · ")
+    + (profile !== null ? `. Estimates come from your Before You Sign profile of ${profile}/100, not from the agencies.` : ".");
+}
+
+/* ---------- estimated scores on each agency's displayed scale ----------
+ * Requested mapping: the educational profile percentage placed onto each agency's displayed scale,
+ *   estimate = round(profile / 100 × scale maximum)
+ * These are Before You Sign estimates. They are not issued by Experian, Equifax or TransUnion, and the
+ * agencies' real methods are their own.
+ */
+
+/** profile% × the scale's maximum, rounded. Out-of-range profiles are clamped to 0–100; anything not a number gives null. */
+export function toAgencyScale(profile: number, scaleId: ScaleId): number | null {
+  if (typeof profile !== "number" || !Number.isFinite(profile)) return null;
+  const p = Math.min(100, Math.max(0, profile));
+  return Math.round((p * SCALES[scaleId].max) / 100);
+}
+
+export interface Conversion { cra: Cra; scaleId: ScaleId; max: number; exact: number; score: number; band: string }
+
+/** The three conversions, with the unrounded value so the arithmetic can be shown. */
+export function conversions(profile: number): Conversion[] {
+  return CRA_ORDER.map((cra) => {
+    const scaleId = CURRENT_SCALE[cra];
+    const scale = SCALES[scaleId];
+    const p = Math.min(100, Math.max(0, profile));
+    const score = toAgencyScale(p, scaleId) ?? 0;
+    return { cra, scaleId, max: scale.max, exact: (p * scale.max) / 100, score, band: bandFor(scale, score)?.label ?? "" };
+  });
+}
+
+/** The calculated profile total, if the questionnaire has been completed. */
+export function profileTotal(c: CreditProfile): number | null {
+  if (!c.calculated || !c.estimate) return null;
+  const r = creditEstimate(c.estimate);
+  return r.ok ? r.estimate.total : null;
+}
+
+export interface DisplayedScore { cra: Cra; scaleId: ScaleId; score: number; max: number; band: string; kind: "entered" | "estimate" }
+
+/** One score per agency: the person's own score where they entered one (it takes precedence), otherwise our estimate. */
+export function displayedScores(c: CreditProfile): DisplayedScore[] {
+  const profile = profileTotal(c);
+  const conv = profile === null ? [] : conversions(profile);
+  const out: DisplayedScore[] = [];
+  for (const cra of CRA_ORDER) {
+    const e = c.scores.find((x) => x.creditProvider === cra);
+    if (e) { out.push({ cra, scaleId: e.creditScale, score: e.creditScore, max: SCALES[e.creditScale].max, band: e.creditBand, kind: "entered" }); continue; }
+    const k = conv.find((x) => x.cra === cra);
+    if (k) out.push({ cra, scaleId: k.scaleId, score: k.score, max: k.max, band: k.band, kind: "estimate" });
   }
-  return parts.join(" ") || "Not provided.";
+  return out;
 }
 
 /** The journey only continues once there's a credit context: at least one valid agency score, or a calculated estimate. */

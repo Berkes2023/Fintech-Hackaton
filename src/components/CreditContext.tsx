@@ -1,28 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
-  bandFor, bandPosition, COMPONENT_MAX, CRA_LABEL, CRA_ORDER, creditEstimate, CURRENT_SCALE, ESTIMATE_BANDS, LABELS, makeScore, missingAnswers,
-  removeScore, SCALES, upsertScore,
-  type BorrowingKind, type Cra, type CraScore, type CreditProfile, type EstimateInputs, type Scale, type ScaleId,
+  bandFor, bandPosition, COMPONENT_MAX, conversions, CRA_LABEL, CRA_ORDER, creditEstimate, CURRENT_SCALE, displayedScores, LABELS, makeScore, missingAnswers,
+  profileTotal, removeScore, SCALES, upsertScore,
+  type BorrowingKind, type Cra, type CraScore, type CreditProfile, type DisplayedScore, type EstimateInputs, type Scale, type ScaleId,
 } from "@/lib/credit";
 import { money } from "@/lib/format";
 import { Icon } from "./Icon";
 
 /* ---------- gauges ---------- */
 
+const MOTION = "(prefers-reduced-motion: reduce)";
+const subscribeMotion = (cb: () => void) => { const m = window.matchMedia(MOTION); m.addEventListener("change", cb); return () => m.removeEventListener("change", cb); };
+
 const GREYS = ["#e3e3e6", "#c9c9cd", "#a1a1a6", "#717173", "#1f1f1f"];
 const pt = (t: number, r: number) => { const a = Math.PI * (1 - t); return [100 + r * Math.cos(a), 100 - r * Math.sin(a)]; };
 const arc = (t0: number, t1: number, r: number) => { const [x0, y0] = pt(t0, r), [x1, y1] = pt(t1, r); return `M${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 0 1 ${x1.toFixed(2)},${y1.toFixed(2)}`; };
 
 /** A half-circle gauge for one agency's scale. Bands are drawn at equal widths; `at` (0–1) places the needle within them. */
-export function Gauge({ bands, at, value, sub, label, legend = true }: { bands: string[]; at: number | null; value: string; sub: string; label: string; legend?: boolean }) {
+export function Gauge({ bands, at, value, sub, label, legend = true, animate = false }: { bands: string[]; at: number | null; value: ReactNode; sub: string; label: string; legend?: boolean; animate?: boolean }) {
   const n = bands.length, gap = 0.008;
   return (
     <figure className="gauge" role="img" aria-label={label}>
       <svg viewBox="0 0 200 116">
         {bands.map((b, i) => <path key={b} d={arc(i / n + gap, (i + 1) / n - gap, 80)} stroke={GREYS[i] ?? "#1f1f1f"} strokeWidth="16" fill="none" />)}
-        {at !== null && (() => { const [x, y] = pt(at, 62); return <><line x1="100" y1="100" x2={x} y2={y} stroke="#1f1f1f" strokeWidth="3.5" strokeLinecap="round" /><circle cx="100" cy="100" r="6" fill="#1f1f1f" /></>; })()}
+        {at !== null && <>
+          {/* The needle points left (0) and is rotated clockwise into place, so it can sweep in when it appears. */}
+          <line x1="100" y1="100" x2="38" y2="100" stroke="#1f1f1f" strokeWidth="3.5" strokeLinecap="round" className={animate ? "needle sweep" : "needle"} style={{ transform: `rotate(${at * 180}deg)` }} />
+          <circle cx="100" cy="100" r="6" fill="#1f1f1f" />
+        </>}
       </svg>
       <figcaption><b>{value}</b><span>{sub}</span></figcaption>
       {legend && <ol className="gauge-legend">{bands.map((b, i) => <li key={b}><i style={{ background: GREYS[i] }} />{b}</li>)}</ol>}
@@ -253,37 +260,82 @@ export function CreditStart({ credit, onChange, onResult, initial = null }: { cr
 
 /* ---------- step 2: your credit context ---------- */
 
-/** Every entered score on its own scale (never averaged), and/or our clearly separate profile estimate. */
+/** Counts up to a number when it first appears. Shows the final value straight away for reduced motion. */
+export function CountUp({ value, ms = 900 }: { value: number; ms?: number }) {
+  const reduced = useSyncExternalStore(subscribeMotion, () => window.matchMedia(MOTION).matches, () => true);
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    if (reduced) return;
+    let frame = 0;
+    const start = performance.now();
+    // Timers (not animation frames) so the count still finishes when the tab is hidden or throttled.
+    const tick = () => {
+      const k = Math.min(1, (performance.now() - start) / ms);
+      setShown(Math.round(value * (1 - Math.pow(1 - k, 3))));
+      if (k < 1) frame = window.setTimeout(tick, 16);
+    };
+    frame = window.setTimeout(tick, 16);
+    return () => window.clearTimeout(frame);
+  }, [value, ms, reduced]);
+  return <>{reduced ? value : shown}</>;
+}
+
+/** One agency card in the result: the person's own score where they gave one, otherwise our clearly labelled estimate. */
+function AgencyResult({ d, profile }: { d: DisplayedScore; profile: number | null }) {
+  const scale = SCALES[d.scaleId];
+  const band = bandFor(scale, d.score);
+  const estimate = d.kind === "estimate";
+  return (
+    <div className={`score-card stack${estimate ? " estimated" : ""}`}>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <b className="h3 cra-title">{CRA_LABEL[d.cra]}</b>
+        <span className={`src-tag${estimate ? " est" : ""}`}>{estimate ? "Before You Sign estimate" : "Score entered by you"}</span>
+      </div>
+      <Gauge bands={scale.bands.map((b) => b.label)} at={band ? bandPosition(scale, d.score) : null} animate
+        value={<CountUp value={d.score} />} sub={`/ ${scale.max} · ${d.band}`} label={`${CRA_LABEL[d.cra]} ${d.score} out of ${scale.max}, ${estimate ? "estimated by Before You Sign" : "entered by you"}, in ${CRA_LABEL[d.cra]}’s ${d.band} band`} legend={false} />
+      <BandStrip scale={scale} score={d.score} />
+      <p className="small muted">
+        {estimate && profile !== null ? `${profile}% of ${scale.max}, placed on ${CRA_LABEL[d.cra]}’s displayed scale.` : `${band?.plain ?? ""}`}
+      </p>
+    </div>
+  );
+}
+
+const fmt = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(2));
+
+/** The credit result: three agency-scale scores up front, then exactly how they were worked out. */
 export function CreditResult({ credit, onEnter }: { credit: CreditProfile; onEnter: (c: Cra) => void }) {
+  const shown = displayedScores(credit);
+  const profile = profileTotal(credit);
   const r = credit.calculated && credit.estimate ? creditEstimate(credit.estimate) : null;
   const e = r?.ok ? r.estimate : null;
   const notEntered = CRA_ORDER.filter((c) => !credit.scores.some((s) => s.creditProvider === c));
+  const anyEstimate = shown.some((d) => d.kind === "estimate");
   return (
     <div className="stack" style={{ gap: 20 }}>
-      {credit.scores.length > 0 && (<>
-        <div className="score-grid">{credit.scores.map((s) => <ScoreCard key={s.creditProvider} s={s} />)}</div>
-        <div className="list stack" style={{ gap: 6 }}>
-          {credit.scores.map((s) => <p key={s.creditProvider} className="score-row"><b>{CRA_LABEL[s.creditProvider]}</b><span>{s.creditScore} / {SCALES[s.creditScale].max}</span><span className="src-tag">{s.creditBand}</span></p>)}
-          {credit.scores.length > 1 && <p className="small"><b>It’s normal for your scores to differ.</b> The three agencies use different data and scoring methods. We never average them or turn them into one score.</p>}
-          {credit.scores.length === 1 && <p className="small">Your other agencies may show a different number: they use different data and scoring methods.</p>}
-        </div>
-      </>)}
+      {anyEstimate && <p className="lead muted" style={{ margin: 0 }}>Based on the credit information you entered{credit.scores.length ? ", and the scores you know" : ""}.</p>}
+      <div className="score-grid three">{shown.map((d) => <AgencyResult key={d.cra} d={d} profile={profile} />)}</div>
+      {anyEstimate && (
+        <p className="est-disclaimer small">These are Before You Sign estimates created by mapping your educational profile percentage onto each agency’s displayed score scale. They are not scores issued by Experian, Equifax or TransUnion and may differ from your actual credit scores.</p>
+      )}
+      {!anyEstimate && credit.scores.length > 1 && <p className="small"><b>It’s normal for your scores to differ.</b> The three agencies use different data and scoring methods. We never average them or turn them into one score.</p>}
 
-      {e && (
-        <section className="estimate-card stack" aria-labelledby="pe-title">
-          <span id="pe-title" className="caption">Before You Sign profile estimate</span>
-          <div className="pe-head"><b>{e.total}</b><span>/ 100</span><span className="pe-band">{e.bandLabel.toUpperCase()}</span></div>
-          <div className="pe-bar" aria-hidden="true">
-            {ESTIMATE_BANDS.map((b) => <span key={b.band} className={b.band === e.band ? "on" : undefined} style={{ flexGrow: b.to - b.from + 1 }}>{b.from}–{b.to}</span>)}
-            <i style={{ left: `${e.total}%` }} />
-          </div>
-          <p className="pe-warning"><b>This is our educational profile estimate. It is not your Experian, Equifax or TransUnion score,</b> and not a prediction of lender approval. The bands are ours, not an agency’s.</p>
-          <details className="why">
-            <summary>Why did I get {e.total}?</summary>
-            <div className="est-table" style={{ marginTop: 10 }}>
+      {notEntered.length > 0 && (
+        <div className="row" style={{ gap: 10 }}>
+          <span className="small muted">Know a real score?</span>
+          {notEntered.map((c) => <button key={c} type="button" className="btn btn-light btn-sm" onClick={() => onEnter(c)}>Enter my {CRA_LABEL[c]} score</button>)}
+        </div>
+      )}
+
+      {e && profile !== null && (
+        <details className="how-calc" open>
+          <summary>How did we calculate these?</summary>
+          <div className="stack" style={{ gap: 16, marginTop: 14 }}>
+            <div className="pe-head"><span className="caption" style={{ width: "100%" }}>Your Before You Sign profile</span><b>{e.total}</b><span>/ 100</span><span className="pe-band">{e.bandLabel.toUpperCase()}</span></div>
+            <div className="est-table">
               {e.components.map((c) => (
                 <details key={c.key} className="est-row">
-                  <summary><span>{c.key === "stability" ? "Other report indicators" : c.label}</span><span className="est-bar" aria-hidden="true"><i style={{ width: `${(c.points / c.max) * 100}%` }} /></span><b>{c.points} / {c.max}</b></summary>
+                  <summary><span>{c.key === "stability" ? "Other indicators" : c.label}</span><span className="est-bar" aria-hidden="true"><i style={{ width: `${(c.points / c.max) * 100}%` }} /></span><b>{c.points} / {c.max}</b></summary>
                   <ul className="small">{c.why.map((w) => <li key={w}>{w}</li>)}</ul>
                   <table className="why-table small"><tbody>
                     {c.steps.map((s, i) => <tr key={s.text}><td>{s.text}</td><td className="num">{i > 0 && s.points > 0 ? "+" : ""}{s.points}</td></tr>)}
@@ -291,17 +343,24 @@ export function CreditResult({ credit, onEnter }: { credit: CreditProfile; onEnt
                   </tbody></table>
                 </details>
               ))}
-              <div className="est-total"><span>Total</span><b>{e.total} / 100</b></div>
+              <div className="est-total"><span>Before You Sign profile</span><b>{e.total} / 100</b></div>
             </div>
-            <p className="small muted">Our weights (35, 25, 15, 10, 10, 5) are an educational model, not any agency’s. Your salary, rent, bonus and living costs aren’t part of this number.</p>
-          </details>
-        </section>
-      )}
-
-      {notEntered.length > 0 && (
-        <div className="row" style={{ gap: 10 }}>
-          {notEntered.map((c) => <button key={c} type="button" className="btn btn-light btn-sm" onClick={() => onEnter(c)}>Enter my {CRA_LABEL[c]} score</button>)}
-        </div>
+            <div className="conv stack" style={{ gap: 6 }}>
+              <span className="caption">Then each agency’s displayed scale</span>
+              {conversions(e.total).map((c) => {
+                const entered = credit.scores.find((s) => s.creditProvider === c.cra);
+                return (
+                  <p key={c.cra} className="conv-row">
+                    <b>{CRA_LABEL[c.cra]}</b>
+                    <span>{e.total}% × {c.max} = {fmt(c.exact)}{fmt(c.exact) !== String(c.score) ? ` → ${c.score}` : ""}</span>
+                    {entered && <span className="small muted">You entered {entered.creditScore}, so your own score is shown instead.</span>}
+                  </p>
+                );
+              })}
+              <p className="small muted">Rounded to the nearest whole number. Our profile weights (35, 25, 15, 10, 10, 5) are an educational model, not any agency’s, and your salary, rent and bonus aren’t part of it.</p>
+            </div>
+          </div>
+        </details>
       )}
     </div>
   );

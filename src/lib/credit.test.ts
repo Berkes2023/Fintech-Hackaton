@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  bandFor, creditEstablished, creditEstimate, creditLine, estimateBand, makeScore, missingAnswers, NO_CREDIT, removeScore, scalePosition, SCALES, upsertScore,
+  bandFor, conversions, creditEstablished, displayedScores, toAgencyScale, creditEstimate, creditLine, estimateBand, makeScore, missingAnswers, NO_CREDIT, removeScore, scalePosition, SCALES, upsertScore,
   type Component, type EstimateInputs,
 } from "./credit";
 
@@ -59,7 +59,7 @@ describe("credit scales", () => {
       ["experian", 940, "Good", "USER_SUPPLIED"], ["equifax", 710, "Very good", "USER_SUPPLIED"], ["transunion", 680, "Good", "USER_SUPPLIED"],
     ]);
     const line = creditLine(c);
-    expect(line).toBe("Experian 940 / 1250 (Good) · Equifax 710 / 1000 (Very good) · TransUnion 680 / 999 (Good). Entered by you.");
+    expect(line).toBe("Experian 940 / 1250 (entered by you) · Equifax 710 / 1000 (entered by you) · TransUnion 680 / 999 (entered by you).");
     expect(line).not.toMatch(/average/i);
     expect(removeScore(c, "equifax").scores).toHaveLength(2);
     expect(scalePosition(SCALES.equifax, 500)).toBeCloseTo(0.5, 5);
@@ -159,9 +159,48 @@ describe("Before You Sign Credit Estimate (0–100)", () => {
 
   it("is described as our educational model, never an official score", () => {
     const c = { scores: [], creditSource: "USER_SUPPLIED" as const, estimate: strong, calculated: true };
-    expect(creditLine(c)).toMatch(/profile estimate: 100\/100.*not an Experian, Equifax or TransUnion score/);
+    expect(creditLine(c)).toBe("Experian 1250 / 1250 (Before You Sign estimate) · Equifax 1000 / 1000 (Before You Sign estimate) · TransUnion 999 / 999 (Before You Sign estimate). Estimates come from your Before You Sign profile of 100/100, not from the agencies.");
     expect(creditLine(c)).not.toMatch(/your (Experian|Equifax|TransUnion) score/i);
     expect(creditEstablished(c)).toBe(true);
     expect(creditEstablished({ ...c, calculated: false })).toBe(false);
+  });
+});
+
+describe("estimated scores on each agency's displayed scale", () => {
+  const triple = (p: number) => conversions(p).map((c) => c.score);
+
+  it("maps profile% onto Experian 1250, Equifax 1000 and TransUnion 999", () => {
+    expect(triple(0)).toEqual([0, 0, 0]);
+    expect(triple(34)).toEqual([425, 340, 340]);
+    expect(triple(50)).toEqual([625, 500, 500]);
+    expect(triple(80)).toEqual([1000, 800, 799]);
+    expect(triple(100)).toEqual([1250, 1000, 999]);
+  });
+
+  it("shows its working: 34% × 999 = 339.66 → 340", () => {
+    const tu = conversions(34)[2];
+    expect(tu.exact).toBeCloseTo(339.66, 2);
+    expect(tu.score).toBe(340);
+    expect(conversions(34)[0].exact).toBe(425);
+  });
+
+  it("rounds half up and stays inside each scale", () => {
+    expect(toAgencyScale(0.04, "experian")).toBe(1); // 0.5 → 1
+    expect(toAgencyScale(0.03, "experian")).toBe(0); // 0.375 → 0
+    expect(toAgencyScale(150, "equifax")).toBe(1000);
+    expect(toAgencyScale(-20, "transunion_new")).toBe(0);
+    expect(toAgencyScale(Number.NaN, "experian")).toBeNull();
+    for (let p = 0; p <= 100; p++) for (const c of conversions(p)) { expect(c.score).toBeGreaterThanOrEqual(0); expect(c.score).toBeLessThanOrEqual(c.max); expect(c.band).not.toBe(""); }
+  });
+
+  it("puts each estimate in that agency's own band", () => {
+    expect(conversions(34).map((c) => c.band)).toEqual(["Low", "Poor", "Very Low"]);
+    expect(conversions(80).map((c) => c.band)).toEqual(["Good", "Very good", "Excellent"]);
+  });
+
+  it("a score the person entered takes precedence over our estimate for that agency only", () => {
+    const c = upsertScore({ scores: [], creditSource: "USER_SUPPLIED", estimate: strong, calculated: true }, makeScore("experian", 920)!);
+    expect(displayedScores(c).map((d) => [d.cra, d.score, d.kind])).toEqual([["experian", 920, "entered"], ["equifax", 1000, "estimate"], ["transunion", 999, "estimate"]]);
+    expect(displayedScores({ ...c, calculated: false }).map((d) => d.cra)).toEqual(["experian"]);
   });
 });

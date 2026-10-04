@@ -19,7 +19,7 @@ import { EventEditor, SourceBadge, WhyBreakdown } from "./CarParts";
 import { Chart } from "./Chart";
 import { CommitCheck } from "./CommitCheck";
 import { CostScanner } from "./CostScanner";
-import { CreditResult, CreditStart, ThreeScales } from "./CreditContext";
+import { CreditResult, CreditStart } from "./CreditContext";
 import { DocumentPanel } from "./DocumentPanel";
 import { Icon } from "./Icon";
 import { startGoal } from "./Journey";
@@ -236,18 +236,15 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
       {step === S.result && (
         <section className="stack journey-card" aria-labelledby="q-result">
           <span className="caption">Before You Sign · Step 2</span>
-          <h2 id="q-result" className="h1">Your credit context</h2>
+          <h2 id="q-result" className="display">{st.credit.calculated ? "Your estimated credit scores" : "Your credit context"}</h2>
           <CreditResult credit={st.credit} onEnter={(c) => { setCraIntent(c); go(S.credit); }} />
           <div className="credit-story stack">
-            <p className="h2">You don’t have just one credit score.</p>
-            <ThreeScales />
-            <p className="lead"><b>Different agencies. Different scales. Potentially different information.</b></p>
-            <p className="display" style={{ fontSize: "clamp(28px, 4vw, 40px)" }}>But your credit score is still only one part of the decision.</p>
-            <p className="lead muted">Now let’s look at the decision you’re considering and what it could mean in your situation.</p>
+            <p className="display" style={{ fontSize: "clamp(30px, 4.4vw, 46px)" }}>Your credit is where we start, not where we stop.</p>
+            <p className="lead muted">Credit can tell us part of the story. Now let’s understand the decision you’re actually considering.</p>
           </div>
           <div className="wizard-nav">
             <button type="button" className="btn btn-light" onClick={() => { setCraIntent(null); go(S.credit); }}>Change my answers</button>
-            <button type="button" className="btn btn-dark" onClick={next}>{st.credit.scores.length ? "Continue" : "Continue with estimate"} <Icon name="arrow" size={18} /></button>
+            <button type="button" className="btn btn-dark" onClick={next}>Continue <Icon name="arrow" size={18} /></button>
           </div>
         </section>
       )}

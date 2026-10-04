@@ -17,29 +17,29 @@ export interface DecisionCopy {
 
 export const DECISIONS: Record<DecisionKind, DecisionCopy> = {
   car: {
-    label: "Buying a car", status: "full", thing: "the car",
+    label: "Buy a car", status: "full", thing: "the car",
     cost: "How much is the car you’re looking at?",
     upfront: "How much could you put down upfront?",
     financeName: "car finance",
     financeQuestion: "How might you finance the rest?",
   },
   home: {
-    label: "Buying a home", status: "simplified", thing: "the property",
+    label: "Buy a home", status: "simplified", thing: "the property",
     cost: "How much is the property?", upfront: "How much deposit do you have?",
     financeName: "mortgage", financeQuestion: "How might a mortgage cover the rest?",
   },
   improve: {
-    label: "Improving my home", status: "simplified", thing: "the project",
+    label: "Improve my home", status: "simplified", thing: "the project",
     cost: "How much is the project likely to cost?", upfront: "How much cash could you use?",
     financeName: "home improvement finance", financeQuestion: "How might you pay for the rest?",
   },
   purchase: {
-    label: "Financing a large purchase", status: "simplified", thing: "the purchase",
+    label: "Finance a large purchase", status: "simplified", thing: "the purchase",
     cost: "How much is it?", upfront: "How much could you pay now?",
     financeName: "purchase finance", financeQuestion: "How might you spread the rest?",
   },
   borrowing: {
-    label: "Managing existing borrowing", status: "guide", thing: "your borrowing",
+    label: "Manage borrowing", status: "guide", thing: "your borrowing",
     cost: "", upfront: "", financeName: "", financeQuestion: "",
   },
   education: {
