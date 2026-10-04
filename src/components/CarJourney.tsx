@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { creditEstablished, creditLine, type Cra } from "@/lib/credit";
+import { aprScenarios, changePoints, compareRows, keyMoments, paymentConsequence, savingsConsequence, scenarioRow, snapshot } from "@/lib/consequence";
 import { DECISIONS, STAGES, type DecisionKind, type Stage } from "@/lib/decision";
 import { risks, simulate, understandingCheck } from "@/lib/finance";
 import { money, pct } from "@/lib/format";
@@ -12,13 +13,14 @@ import { GOALS, type Goal } from "@/lib/journey";
 import {
   amountOf, applyLevers, carScenario, debtPayments, EMPTY_CAR, eventAmount, eventLine, eventTag, exampleCar,
   hiddenCost, illustrativeProviders, impact, LEVERS, position, recurringIncome, schedule, simulateMonths, statements, toFinance, toMonthly,
-  type CarState, type Item, type Lever, type Picture, type Scenario,
+  type CarState, type Item, type Lever, type LeverAmounts, type Picture, type Scenario,
 } from "@/lib/sim";
 import { carStore, commitmentsStore, journeyStore, newOptionId, savedStore, thisMonth, MAX_SAVED } from "@/lib/store";
 import { EventEditor, SourceBadge, WhyBreakdown } from "./CarParts";
 import { Chart } from "./Chart";
 import { CommitCheck } from "./CommitCheck";
 import { CostScanner } from "./CostScanner";
+import { BeforeAfter, Consequence } from "./Consequence";
 import { CreditResult, CreditStart } from "./CreditContext";
 import { DocumentPanel } from "./DocumentPanel";
 import { Icon } from "./Icon";
@@ -27,27 +29,28 @@ import { PasteFill, type FillResult } from "./PasteFill";
 
 // One natural question per screen, in the order a person thinks a decision through.
 const STEPS: { stage: Stage; title: string }[] = [
+  { stage: "My situation", title: "Monthly income" },
+  { stage: "My situation", title: "Monthly spending" },
+  { stage: "My situation", title: "Existing borrowing" },
+  { stage: "My situation", title: "Savings and buffer" },
+  { stage: "My situation", title: "Longer-term contributions" },
+  { stage: "My situation", title: "Your situation today" },
   { stage: "Credit context", title: "Understand your credit" },
   { stage: "Credit context", title: "Your credit context" },
-  { stage: "Goal", title: "What are you thinking about?" },
+  { stage: "Goal", title: "What are you considering?" },
   { stage: "Purchase", title: "The car" },
   { stage: "Purchase", title: "How it could be funded" },
-  { stage: "Finance", title: "Finance scenarios" },
-  { stage: "My situation", title: "Monthly income" },
-  { stage: "My situation", title: "Existing spending" },
-  { stage: "My situation", title: "Existing borrowing" },
-  { stage: "My situation", title: "Financial buffer" },
-  { stage: "My situation", title: "Longer-term contributions" },
+  { stage: "Finance", title: "Finance and its consequences" },
   { stage: "Future", title: "What’s changing" },
-  { stage: "Simulation", title: "What this could mean" },
-  { stage: "Simulation", title: "Over time" },
+  { stage: "Consequences", title: "What this changes for you" },
+  { stage: "Consequences", title: "Over time" },
   { stage: "What if", title: "What if" },
   { stage: "Decode It", title: "Decode the real agreement" },
   { stage: "Before you sign", title: "Before you sign" },
 ];
 const S = {
-  credit: 0, result: 1, goal: 2, price: 3, deposit: 4, finance: 5, income: 6, spending: 7, borrowing: 8, buffer: 9, longterm: 10,
-  future: 11, impact: 12, timeline: 13, whatif: 14, decode: 15, summary: 16,
+  income: 0, spending: 1, borrowing: 2, buffer: 3, longterm: 4, snapshot: 5, credit: 6, result: 7, goal: 8, price: 9, deposit: 10, finance: 11,
+  future: 12, impact: 13, timeline: 14, whatif: 15, decode: 16, summary: 17,
 } as const;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -100,10 +103,10 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
   const [wanted] = useState(() => params.get("goal") as Goal | null);
   // Which agency to open when someone chooses "Enter my Experian score" etc. from the result screen.
   const [craIntent, setCraIntent] = useState<Cra | null>(null);
-  // Credit is the gateway: without a credit result, every step (including deep links) shows the credit step.
-  const step = established ? rawStep : 0;
+  // Your situation comes first. After it, credit is the gateway: nothing beyond the credit step until there's a credit result.
+  const step = rawStep <= S.credit || established ? rawStep : S.credit;
   const [levers, setLevers] = useState<Lever[]>([]);
-  const [amounts, setAmounts] = useState({ rent: 100, salary: 150 });
+  const [amounts, setAmounts] = useState<LeverAmounts>({ rent: 100, salary: 150 });
   const [horizon, setHorizon] = useState(12);
   const [full, setFull] = useState(false);
   const [doc, setDoc] = useState<Omit<FillResult, "type" | "values"> | null>(null);
@@ -131,13 +134,24 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
   const longTerm = (p.pension.alreadyDeducted ? 0 : p.pension.amount) + sumList(p.otherSaving);
   const bufferStart = p.reserves.savings + p.reserves.emergency;
   const loan = p.debts.find((d) => d.id === "loan");
-  const rows = simulateMonths(p, st.events, sc, Math.max(24, Math.min(84, sc.startIn + sc.term)));
+  // The consequence engine (lib/consequence.ts): every figure below is calculated, never typed in.
+  const snap = snapshot(p);
+  const fromSavings = st.depositFromSavings !== false;
+  const sav = savingsConsequence(snap.buffer, fromSavings ? st.purchase.deposit : 0);
+  // If the deposit comes from savings, the simulation starts from the savings left afterwards.
+  const pSim: Picture = fromSavings ? { ...p, reserves: { savings: sav.after, emergency: 0 } } : p;
+  const rows = simulateMonths(pSim, st.events, sc, Math.max(24, Math.min(84, sc.startIn + sc.term)));
+  const pay = paymentConsequence(snap, sch.regular, st.preferredBuffer);
+  const changes = changePoints(p, st.events, sc, rows, monthName);
   const without = simulateMonths(p, st.events, null, 12);
   const oneOffIns = st.events.filter((e) => e.recurrence === "one_off" && e.direction === "in");
   const firstBonus = [...oneOffIns].sort((a, b) => a.month - b.month)[0];
   const show = (k: string) => { setActive(null); requestAnimationFrame(() => setActive(k)); };
   const paySource = sc.source === "document" ? "document_says" : "we_calculated";
   const termsSource = sc.source === "document" ? "document_says" : sc.fieldSources.apr === "illustrative" ? "illustrative" : "you_told_us";
+  const moments = keyMoments(p, st.events, sc, st.purchase.deposit, monthName);
+  const exploreTo = (l: Lever) => { setLevers([l]); go(S.whatif); };
+  const why = (text: string) => <details className="why"><summary>Why am I seeing this?</summary><p className="small" style={{ margin: "8px 0 0" }}>{text}</p></details>;
 
   const nav = (label = "Next", disabled = false) => (
     <div className="wizard-nav">
@@ -224,10 +238,37 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
       <p className="small muted">Step {step + 1} of {STEPS.length} · {STEPS[step].title}</p>
       {step > S.price && step < S.impact && story()}
 
+      {step === S.snapshot && (
+        <section className="stack journey-card" aria-labelledby="q-snap">
+          <span className="caption">Before You Sign · Your situation today</span>
+          <h2 id="q-snap" className="display">Your situation today</h2>
+          <div className="snap">
+            <div className="snap-row"><span>Income</span><b>{money(snap.income)}</b>{why("Your take-home salary plus any other income that arrives every month. One-off money such as a bonus isn’t included.")}</div>
+            <div className="snap-row"><span>Regular outgoings</span><b>−{money(snap.essentials + snap.otherSpending)}</b>{why(`Essentials (${money(snap.essentials)}: rent, bills, food, transport, insurance) plus other regular spending (${money(snap.otherSpending)}).`)}</div>
+            <div className="snap-row"><span>Existing debt payments</span><b>−{money(snap.debt)}</b>{why("Loans, credit cards, car finance, Buy Now Pay Later and overdraft repayments you told us about.")}</div>
+            <div className="snap-row"><span>Regular saving and pension commitments</span><b>−{money(snap.commitments)}</b>{why(p.pension.alreadyDeducted ? "Regular saving and other commitments. Your pension is already taken from your pay, so it isn’t counted twice." : "Your pension contribution, regular saving and other regular commitments.")}</div>
+            <div className="snap-row total"><span>Estimated monthly remaining</span><b>{money(snap.remaining)}</b><WhyBreakdown title="Regular income minus regular costs, from what you’ve told us." result={pos} /></div>
+            <div className="snap-row"><span>Savings and cash buffer</span><b>{money(snap.buffer)}</b>{why("Your savings plus emergency fund.")}</div>
+            {snap.debtPct !== null && <div className="snap-row"><span>Existing debt payments as a share of income</span><b>{snap.debtPct}%</b>{why(`${money(snap.debt)} ÷ ${money(snap.income)} × 100.`)}</div>}
+            {snap.monthsOfEssentials !== null && <div className="snap-row"><span>Your buffer covers about</span><b>{snap.monthsOfEssentials} months</b>{why(`${money(snap.buffer)} ÷ ${money(snap.essentials)} of essential costs a month. A way to picture your buffer, not a target.`)}</div>}
+          </div>
+          <p className="small muted">An estimate from what you’ve told us. It isn’t an official affordability assessment.</p>
+          <section className="card stack">
+            <label htmlFor="pref-buffer" className="h3">How much would you personally like to keep uncommitted each month? <span className="small muted">(optional)</span></label>
+            <div className="journey-fields" style={{ maxWidth: 320 }}>
+              <div className="field"><div className="input"><span>£</span><input id="pref-buffer" type="number" min={0} step={50} placeholder="e.g. 300" value={st.preferredBuffer ?? ""} onChange={(e) => set({ preferredBuffer: e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0) })} /></div></div>
+            </div>
+            <p className="small muted">Your own number, not a rule. If you set one, we’ll show how each scenario compares with it.</p>
+          </section>
+          <p className="lead">We’ll use this context to show what changes when you explore a financial decision.</p>
+          {nav("Now, my credit context")}
+        </section>
+      )}
+
       {step === S.credit && (
         <section className="stack journey-card" aria-labelledby="q-credit">
-          <span className="caption">Before You Sign · Step 1</span>
-          <h2 id="q-credit" className="display">Let’s understand your credit</h2>
+          <span className="caption">Before You Sign · Step 2</span>
+          <h2 id="q-credit" className="display">Now let’s understand your credit context</h2>
           <p className="lead muted">In the UK, you don’t have one universal credit score. Experian, Equifax and TransUnion use different scoring systems. Enter any you know, or none.</p>
           <CreditStart key={craIntent ?? "start"} initial={craIntent} credit={st.credit} onChange={(credit) => set({ credit })} onResult={goFromCredit} />
         </section>
@@ -235,7 +276,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
 
       {step === S.result && (
         <section className="stack journey-card" aria-labelledby="q-result">
-          <span className="caption">Before You Sign · Step 2</span>
+          <span className="caption">Before You Sign · Your credit context</span>
           <h2 id="q-result" className="display">{st.credit.calculated ? "Your estimated credit scores" : "Your credit context"}</h2>
           <CreditResult credit={st.credit} onEnter={(c) => { setCraIntent(c); go(S.credit); }} />
           <div className="credit-story stack">
@@ -252,7 +293,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
       {step === S.goal && (
         <section className="stack journey-card" aria-labelledby="q-goal">
           <span className="caption">✓ Credit context done · {creditLine(st.credit)}</span>
-          <h2 id="q-goal" className="display">What are you thinking about?</h2>
+          <h2 id="q-goal" className="display">What are you considering?</h2>
           {wanted && wanted !== "car" && wanted !== "invest" && (
             <div className="notice row" style={{ justifyContent: "space-between" }}>
               <span>You picked <b>{GOALS[wanted].label}</b> on the home page.</span>
@@ -309,6 +350,13 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
             <span className="small">− {money(st.purchase.deposit)} deposit</span>
             <b>= {money(financed)}</b>
           </div>
+          <label className="quiz-option"><input type="checkbox" checked={fromSavings} onChange={(e) => set({ depositFromSavings: e.target.checked })} /> The deposit comes from the savings I told you about</label>
+          {fromSavings && st.purchase.deposit > 0 && (
+            <Consequence label="What the deposit does to your savings" result={`${money(sav.before)} → ${money(sav.after)}`} sub="cash savings before and after the deposit"
+              means={[sav.sentence, "A larger deposit means borrowing less, but it also uses more of your cash now. Both matter."]}
+              changes={[{ label: "Savings", before: money(sav.before), after: money(sav.after) }, { label: "Amount to finance", before: money(st.purchase.price), after: money(financed) }]}
+              explore={[3000, Math.round(snap.buffer / 2 / 100) * 100, snap.buffer].filter((d, i, a) => d > 0 && d <= st.purchase.price && a.indexOf(d) === i && d !== st.purchase.deposit).map((d) => ({ label: `What if I use a ${money(d)} deposit?`, onClick: () => set({ purchase: { ...st.purchase, deposit: d, saved: d } }) }))} />
+          )}
           {nav("How might I finance it?")}
         </section>
       )}
@@ -318,6 +366,8 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
         const f = st.finance;
         const mine = carScenario({ ...st, use: "mine" });
         const mineSch = schedule(mine);
+        const mineC = paymentConsequence(snap, mineSch.regular, st.preferredBuffer);
+        const rates = aprScenarios(snap, mine.amount, mine.term, [8, 12, 18], st.preferredBuffer);
         return (
           <section className="stack" style={{ gap: 20 }} aria-labelledby="q-fin">
             <h2 id="q-fin" className="h1">{copy.financeQuestion}</h2>
@@ -351,8 +401,53 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
               </div>
               <div className="big-fact"><span className="caption">Monthly payment <SourceBadge source="we_calculated" /></span><b>{money(mineSch.regular, true)}</b><span className="small">{money(mineSch.total)} repaid in total · {money(mineSch.cost)} borrowing cost</span></div>
             </section>
+            <Consequence label="Monthly payment" result={money(mineSch.regular, true)} sub={`${pct(mine.apr)} APR · ${mine.term} months · ${money(mineSch.total)} in total · ${money(mineSch.cost)} borrowing cost`}
+              means={mineC.sentences}
+              changes={[
+                { label: "Estimated monthly remaining", before: money(mineC.before), after: money(mineC.after) },
+                ...(mineC.debtPctBefore !== null && mineC.debtPctAfter !== null ? [{ label: "Borrowing repayments as a share of income", before: `${mineC.debtPctBefore}%`, after: `${mineC.debtPctAfter}%` }] : []),
+              ]}
+              explore={[
+                ...(oneOffIns.length ? [{ label: "Wait for my bonus", onClick: () => exploreTo("waitBonus") }] : []),
+                { label: "Increase my deposit", onClick: () => exploreTo("deposit") },
+                { label: "Choose 36 months", onClick: () => exploreTo("term36") },
+                { label: "Choose 60 months", onClick: () => exploreTo("term60") },
+                { label: "A lower APR", onClick: () => exploreTo("aprDown") },
+                { label: "A higher APR", onClick: () => exploreTo("aprUp") },
+                { label: "A cheaper car", onClick: () => exploreTo("carCheaper") },
+              ]} />
+
+            <section className="card stack" aria-labelledby="rate-q">
+              <h3 id="rate-q" className="h3">See what the rate changes</h3>
+              <p className="small">Credit profile can influence the borrowing options and terms a lender may offer. We don’t know what rate a lender would offer you, so here are the consequences of three <b>illustrative</b> rates on {money(mine.amount)} over {mine.term} months. These are scenarios, not predicted offers.</p>
+              <div className="table-wrap">
+                <table className="cmp">
+                  <thead><tr><th scope="col">Illustrative rate</th><th scope="col">Each month</th><th scope="col">Total repaid</th><th scope="col">Borrowing cost</th><th scope="col">Monthly remaining after</th>{st.preferredBuffer != null && <th scope="col">vs your £{st.preferredBuffer} buffer</th>}</tr></thead>
+                  <tbody>
+                    {rates.rows.map((r) => (
+                      <tr key={r.apr}><th scope="row">{r.apr}% APR</th><td>{money(r.monthly, true)}</td><td>{money(r.total)}</td><td>{money(r.cost)}</td><td>{money(r.remainingAfter)}</td>{r.bufferGap !== null && <td>{r.bufferGap < 0 ? `${money(-r.bufferGap)} below` : `${money(r.bufferGap)} above`}</td>}</tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="insight small">{rates.note}</p>
+            </section>
+
+            <section className="card stack" aria-labelledby="cmp-q">
+              <h3 id="cmp-q" className="h3">Compare the consequences, not just the payment</h3>
+              {providers.filter((x) => x.id !== providers[0].id).map((x) => {
+                const a = scenarioRow(snap, providers[0], st.preferredBuffer), b = scenarioRow(snap, x, st.preferredBuffer);
+                return (
+                  <div key={x.id} className="cmp-pair">
+                    <p className="small"><b>{x.provider}</b> compared with <b>{providers[0].provider}</b>:</p>
+                    <ul className="small">{compareRows({ ...a, label: providers[0].provider ?? a.label }, { ...b, label: x.provider ?? b.label }).map((t) => <li key={t}>{t}</li>)}</ul>
+                  </div>
+                );
+              })}
+              <p className="small muted">A smaller monthly payment can mean a longer commitment and a higher total cost. Which matters more is your call.</p>
+            </section>
             <p className="small muted">Already have a real agreement? You’ll decode it later in the story, or <button type="button" className="link small" onClick={() => go(S.decode)}>jump to Decode It now</button>.</p>
-            {nav("Now, my situation")}
+            {nav("What’s coming up?")}
           </section>
         );
       })()}
@@ -361,7 +456,9 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
         <div className="picture-layout">
           <section className="stack journey-card">
             {step === S.income && (<>
-              <p className="insight lead">Your credit profile is only part of the story. {money(sch.regular, true)} a month is only one number: what would it mean in your situation?</p>
+              <span className="caption">Before You Sign · Step 1</span>
+              <h2 className="display">First, let’s understand your situation.</h2>
+              <p className="lead muted">A monthly payment means something different for everyone. Tell us a little about your financial situation so we can put the numbers into context.</p>
               <h2 className="h1">What money regularly comes in?</h2>
               <p className="muted">After tax, each month. Rough is fine, and everything stays in your browser.</p>
               {fields("income", [["salary", "Take-home salary"], ["other", "Other recurring income", "Only money that arrives every month."]])}
@@ -403,7 +500,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
               <p className="small muted">Workplace pensions usually are. If so, we don’t count it twice.</p>
               {fields("otherSaving", [["regular", "Regular savings or investments a month"], ["otherCommit", "Other regular commitments", "e.g. childcare or support payments."]])}
             </>)}
-            {nav(step === S.longterm ? "What’s changing?" : "Next")}
+            {nav(step === S.longterm ? "See my situation today" : "Next")}
           </section>
           {situationCard()}
         </div>
@@ -434,8 +531,23 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
         const h = hiddenCost(p, st.events, sc);
         return (
           <section className="stack" style={{ gap: 20 }} aria-labelledby="q-impact">
-            <span className="caption">The simulation</span>
-            <h2 id="q-impact" className="display">Here’s what this decision could mean in your situation.</h2>
+            <span className="caption">Consequences</span>
+            <h2 id="q-impact" className="display">Here’s what this decision could change for you.</h2>
+            <BeforeAfter
+              before={[["Income", money(snap.income)], ["Monthly remaining", money(pay.before)], ["Savings", money(sav.before)]]}
+              after={[["Income", money(snap.income)], ["Car", `−${money(pay.payment, true)}`], ["Monthly remaining", money(pay.after)], [fromSavings ? "Savings after deposit" : "Savings", money(fromSavings ? sav.after : sav.before)]]}
+              deltas={[`−${money(pay.payment, true)} monthly flexibility`, ...(fromSavings && st.purchase.deposit > 0 ? [`−${money(Math.min(st.purchase.deposit, sav.before))} immediate cash buffer`] : [])]} />
+            <Consequence label="What this changes for you" result={`${money(pay.before)} → ${money(pay.after)}`} sub="estimated monthly remaining, before and after this commitment"
+              means={[...pay.sentences, ...(fromSavings && st.purchase.deposit > 0 ? [sav.sentence] : [])]}
+              explore={[
+                ...(oneOffIns.length ? [{ label: "Wait for my bonus", onClick: () => exploreTo("waitBonus") }] : []),
+                { label: "Increase my deposit", onClick: () => exploreTo("deposit") },
+                { label: "Change the term", onClick: () => exploreTo("term60") },
+                { label: "Compare a lower APR", onClick: () => exploreTo("aprDown") },
+                { label: "Compare a higher APR", onClick: () => exploreTo("aprUp") },
+                { label: "Choose a cheaper car", onClick: () => exploreTo("carCheaper") },
+              ]} />
+
             <div className="reveal-grid">
               <div className="card stack reveal" style={{ ["--i" as string]: 0 }}><span className="caption">The goal</span><p className="h3">{money(st.purchase.price)} car</p></div>
               <div className="card stack reveal" style={{ ["--i" as string]: 1 }}><span className="caption">The funding</span><p className="small">{money(st.purchase.deposit)} deposit</p><p className="h3">{money(sc.amount)} financed</p></div>
@@ -530,6 +642,11 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
               {[3, 6, 12, 24].map((hz) => <button key={hz} type="button" aria-pressed={horizon === hz} onClick={() => setHorizon(hz)}>{hz} months</button>)}
             </div>
             <p className="estimate-note small"><b>A simulation based on the assumptions you’ve entered, not a prediction.</b></p>
+            <ol className="moments" aria-label="Key moments of this decision">
+              {moments.map((mo, i) => <li key={`${mo.when}-${i}`}><span className="caption">{mo.when}</span><b>{mo.label}</b>{mo.amount && <span className="small">{mo.amount}</span>}</li>)}
+            </ol>
+            {changes.map((c) => <p key={c.m} className="insight">{c.sentence}</p>)}
+
             {said.map((s) => <p key={s} className="insight">{s}</p>)}
             <section className="card stack">
               <Chart label="Money left each month and cash buffer over time" endLabels={false}
@@ -560,10 +677,10 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
       })()}
 
       {step === S.whatif && (() => {
-        const base = { picture: p, events: st.events, scenario: sc };
+        const base = { picture: pSim, events: st.events, scenario: sc };
         const alt = applyLevers(base, levers, amounts);
         const H = Math.max(24, Math.min(84, alt.scenario.startIn + alt.scenario.term));
-        const baseRows = simulateMonths(p, st.events, sc, H);
+        const baseRows = simulateMonths(pSim, st.events, sc, H);
         const altRows = simulateMonths(alt.picture, alt.events, alt.scenario, H);
         const bs = schedule(sc), as = schedule(alt.scenario);
         const typical = (rs: typeof baseRows, from: number) => { const v = rs.slice(from, from + 12).map((r) => r.normalLeft).sort((a, b) => a - b); return v[Math.floor(v.length / 2)] ?? 0; };
@@ -577,6 +694,10 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
           if (alt.scenario.amount !== sc.amount) changed.push(`Finance goes from ${money(sc.amount)} to ${money(alt.scenario.amount)}.`);
           if (Math.abs(as.regular - bs.regular) > 0.5) changed.push(`The monthly payment goes from ${money(bs.regular, true)} to ${money(as.regular, true)}.`);
           if (Math.abs(as.cost - bs.cost) > 0.5) changed.push(`The borrowing cost goes from ${money(bs.cost)} to ${money(as.cost)}.`);
+          const altSnap = snapshot(alt.picture);
+          const altPay = paymentConsequence(altSnap, as.regular, st.preferredBuffer);
+          if (Math.abs(altPay.after - pay.after) > 0.5) changed.push(`Your estimated monthly remaining (once payments start) would be ${money(altPay.after)} instead of ${money(pay.after)}.`);
+          if (altPay.bufferGap !== null) changed.push(altPay.sentences[altPay.sentences.length - 1]);
           if (alt.scenario.startIn) changed.push(`The first payment moves to ${monthName(alt.scenario.startIn + 1)}.`);
           const bb = baseRows[11].buffer, ab = altRows[11].buffer;
           if (Math.abs(ab - bb) > 0.5) changed.push(`Your cash buffer after 12 months would be ${money(ab)} instead of ${money(bb)}.`);
@@ -587,10 +708,15 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
             {firstBonus && (
               <div className="notice stack">
                 <p className="lead"><b>You told us you’re receiving {money(firstBonus.amount)} {firstBonus.month === 1 ? "next month" : `in ${monthName(firstBonus.month)}`}.</b></p>
-                <p className="small">You decide whether that money goes towards the car. Nothing is assumed.</p>
-                <button type="button" className={levers.includes("waitBonus") ? "btn btn-dark btn-sm" : "btn btn-light btn-sm"} aria-pressed={levers.includes("waitBonus")} onClick={() => toggle("waitBonus")} style={{ justifySelf: "start" }}>
-                  {levers.includes("waitBonus") ? "Showing: wait and add it to the deposit" : "What if I waited for the bonus?"}
-                </button>
+                <p className="small">Would you like to explore using some or all of this bonus towards the deposit? Nothing is assumed: it’s your choice.</p>
+                <div className="row" style={{ gap: 10 }}>
+                  <button type="button" className={levers.includes("waitBonus") ? "btn btn-dark btn-sm" : "btn btn-light btn-sm"} aria-pressed={levers.includes("waitBonus")} onClick={() => toggle("waitBonus")}>
+                    {levers.includes("waitBonus") ? "Showing: wait and use it towards the deposit" : "What if I wait for my bonus?"}
+                  </button>
+                  {levers.includes("waitBonus") && (
+                    <div className="field" style={{ maxWidth: 220 }}><label htmlFor="w-bonus">How much of it?</label><div className="input"><span>£</span><input id="w-bonus" type="number" min={0} max={firstBonus.amount} step={250} value={amounts.bonus ?? firstBonus.amount} onChange={(e) => setAmounts({ ...amounts, bonus: Math.max(0, Math.min(firstBonus.amount, Number(e.target.value) || 0)) })} /></div></div>
+                  )}
+                </div>
               </div>
             )}
             <p className="muted">Or try any combination. Our code reruns the whole simulation; nothing here is a prediction or advice.</p>
@@ -676,26 +802,31 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
       {step === S.summary && (
         <section className="stack" style={{ gap: 20 }} aria-labelledby="q-sum">
           <h2 id="q-sum" className="display">Before you sign</h2>
-          <p className="lead muted">The whole picture, in one place.</p>
           <div className="summary-grid">
-            <div className="card stack"><span className="caption">The goal <SourceBadge source="you_told_us" /></span>
-              <dl className="mlabel-rows"><div><dt>Car price</dt><dd>{money(st.purchase.price)}</dd></div><div><dt>Deposit</dt><dd>{money(st.purchase.deposit)}</dd></div><div className="strong"><dt>Financed</dt><dd>{money(sc.amount)}</dd></div></dl>
+            <div className="card stack"><span className="caption">The decision <SourceBadge source="you_told_us" /></span>
+              <dl className="mlabel-rows"><div><dt>Car</dt><dd>{money(st.purchase.price)}</dd></div><div><dt>Deposit</dt><dd>{money(st.purchase.deposit)}</dd></div><div className="strong"><dt>Financed</dt><dd>{money(sc.amount)}</dd></div></dl>
             </div>
-            <div className="card stack"><span className="caption">The finance <SourceBadge source={termsSource} /></span>
-              <dl className="mlabel-rows"><div><dt>APR</dt><dd>{pct(sc.apr)}</dd></div><div><dt>Term</dt><dd>{sc.term} months</dd></div><div><dt>Monthly</dt><dd>{money(sch.regular, true)}</dd></div><div><dt>Total repaid</dt><dd>{money(sch.total)}</dd></div><div className="strong"><dt>Borrowing cost</dt><dd>{money(sch.cost)}</dd></div></dl>
+            <div className="card stack"><span className="caption">The commitment <SourceBadge source={termsSource} /></span>
+              <dl className="mlabel-rows"><div><dt>Each month</dt><dd>{money(sch.regular, true)}</dd></div><div><dt>Term</dt><dd>{sc.term} months at {pct(sc.apr)} APR</dd></div><div><dt>Total repayment</dt><dd>{money(sch.total)}</dd></div><div className="strong"><dt>Borrowing cost</dt><dd>{money(sch.cost)}</dd></div></dl>
+            </div>
+            <div className="card stack emph-card"><span className="caption">What it changes for you <SourceBadge source="we_calculated" /></span>
+              <dl className="mlabel-rows">
+                <div><dt>Monthly remaining</dt><dd>{money(pay.before)} → {money(pay.after)}</dd></div>
+                {fromSavings && <div><dt>Savings after deposit</dt><dd>{money(sav.before)} → {money(sav.after)}</dd></div>}
+                {pay.debtPctBefore !== null && pay.debtPctAfter !== null && <div><dt>Borrowing repayments as a share of income</dt><dd>{pay.debtPctBefore}% → {pay.debtPctAfter}%</dd></div>}
+                {st.preferredBuffer != null && <div><dt>Your chosen buffer</dt><dd>{money(st.preferredBuffer)}</dd></div>}
+                {pay.bufferGap !== null && <div className="strong"><dt>Difference</dt><dd>{pay.bufferGap < 0 ? `${money(-pay.bufferGap)} below your buffer` : `${money(pay.bufferGap)} above your buffer`}</dd></div>}
+              </dl>
+            </div>
+            <div className="card stack"><span className="caption">What changes later <SourceBadge source="you_told_us" /></span>
+              {changes.length || st.events.length ? (
+                <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
+                  {st.events.filter((e) => e.recurrence === "one_off").map((e) => <li key={e.id}>{eventLine(e, monthName)}</li>)}
+                  {changes.map((c) => <li key={c.m}>{c.sentence}</li>)}
+                </ul>
+              ) : <p className="small muted">Nothing you’ve told us changes over the term.</p>}
             </div>
             <div className="card stack"><span className="caption">Credit context <SourceBadge source="you_told_us" /></span><p className="small">{creditLine(st.credit)}</p><p className="small muted">Not an affordability check, and not a prediction of what a lender would offer.</p></div>
-            <div className="card stack"><span className="caption">Your situation <SourceBadge source="you_told_us" /></span>
-              <dl className="mlabel-rows"><div><dt>Recurring income</dt><dd>{money(income)}</dd></div><div><dt>Normal commitments</dt><dd>{money(spending + longTerm)}</dd></div><div><dt>Existing borrowing</dt><dd>{money(borrowing)}</dd></div><div><dt>Remaining before the car</dt><dd>{money(pos.value)}</dd></div><div className="strong"><dt>Remaining after the car</dt><dd>{money(imp.after)}</dd></div></dl>
-            </div>
-            <div className="card stack"><span className="caption">Coming up <SourceBadge source="you_told_us" /></span>
-              {st.events.length || (loan && loan.amount > 0 && loan.endsIn) ? (
-                <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
-                  {st.events.map((e) => <li key={e.id}>{eventLine(e, monthName)}</li>)}
-                  {loan && loan.amount > 0 && loan.endsIn && <li>Existing loan ({money(loan.amount)} a month) has its last payment in {monthName(loan.endsIn - 1)}</li>}
-                </ul>
-              ) : <p className="small muted">Nothing added.</p>}
-            </div>
             <div className="card stack"><span className="caption">Important terms <SourceBadge source="document_says" /></span>
               {st.offer?.terms?.length ? (
                 <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6 }}>
@@ -704,7 +835,17 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
               ) : <p className="small muted">No agreement decoded yet. <button type="button" className="link small" onClick={() => go(S.decode)}>Decode It</button></p>}
             </div>
           </div>
-          {statements(rows.slice(0, 24), bufferStart, monthName).map((s) => <p key={s} className="insight small">{s}</p>)}
+          <section className="card stack">
+            <span className="caption">Things worth exploring</span>
+            <div className="chips">
+              {oneOffIns.length > 0 && <button type="button" className="chip" onClick={() => exploreTo("waitBonus")}>Wait for my bonus</button>}
+              <button type="button" className="chip" onClick={() => go(S.deposit)}>Use a different deposit</button>
+              <button type="button" className="chip" onClick={() => exploreTo("aprDown")}>Compare a lower APR</button>
+              <button type="button" className="chip" onClick={() => exploreTo("aprUp")}>Compare a higher APR</button>
+              <button type="button" className="chip" onClick={() => exploreTo("term36")}>Change the term</button>
+              <button type="button" className="chip" onClick={() => exploreTo("carCheaper")}>Choose a lower purchase price</button>
+            </div>
+          </section>
           <CommitCheck type="loan" m={loanM} risks={risks("loan", loanValues, loanM)} check={understandingCheck("loan", loanValues, loanM)} perLabel="a month" onSave={() => {
             if (saved.length < MAX_SAVED) savedStore.set([...saved, { id: newOptionId(), name: `Car: ${sc.label}`, type: "loan", values: loanValues }]);
           }} />
@@ -716,7 +857,8 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
           {msg && <p className="small" role="status">{msg}</p>}
           <button type="button" className="link small" onClick={() => { carStore.set(EMPTY_CAR); setDoc(null); setLevers([]); go(0); }}>Clear my answers and start again</button>
           {nav()}
-          <p className="lead closing">We’ve shown how the numbers change under the information and assumptions you’ve provided. The decision remains yours.</p>
+          <p className="display closing-big">The decision remains yours.</p>
+          <p className="lead closing">We’ve shown how the numbers change under the information and assumptions you’ve provided.</p>
         </section>
       )}
     </div>

@@ -140,8 +140,8 @@ export function HeroTyper() {
           </>}
       {question && (
         <div className="hero-reveal">
-          <p className="display-xl">See beyond the monthly payment.</p>
-          <p className="lead">Understand your credit, the real cost and how a financial decision could affect your situation, before you commit.</p>
+          <p className="display-xl">Every financial decision has consequences.</p>
+          <p className="lead">See beyond the monthly payment. Understand your situation, your credit and the real cost, and see what a decision could change for you, before you commit.</p>
         </div>
       )}
     </div>

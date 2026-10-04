@@ -3,7 +3,8 @@ const gbp2 = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP"
 
 /** £1,234 for large amounts, £12.34 for small ones (or always pence when `exact`). */
 export function money(v: number, exact = false): string {
-  return exact || Math.abs(v) < 100 ? gbp2.format(v) : gbp0.format(v);
+  // Pence only when they matter: exact amounts, or small amounts that aren’t whole pounds.
+  return exact || (Math.abs(v) < 100 && !Number.isInteger(Math.round(v * 100) / 100)) ? gbp2.format(v) : gbp0.format(v);
 }
 
 export function pct(v: number): string {

@@ -4,6 +4,7 @@ import { Gauge } from "@/components/CreditContext";
 import { Dashboard } from "@/components/Dashboard";
 import { Icon } from "@/components/Icon";
 import { Counter, DotGrid, HeroTyper, Reveal, Sequence, Stage, TypeOnce } from "@/components/StoryKit";
+import { paymentConsequence, snapshot } from "@/lib/consequence";
 import { bandPosition, CRA_LABEL, CURRENT_SCALE, makeScore, SCALES, type Cra } from "@/lib/credit";
 import { money } from "@/lib/format";
 import { blankPicture, position, schedule, withAmount, type Picture, type Scenario } from "@/lib/sim";
@@ -26,7 +27,16 @@ function numbers() {
     debts: withAmount(bp.debts, "loan", 180),
     reserves: { savings: 5000, emergency: 0 },
   };
+  // The home-page consequence example: £670 left today, a £420 proposed payment.
+  const ex: Picture = {
+    ...alex,
+    otherSaving: withAmount(bp.otherSaving, "regular", 75),
+    pension: { amount: 125, alreadyDeducted: false, employer: 0 },
+  };
+  const exSnap = snapshot(ex);
+  const conseq = { ...paymentConsequence(exSnap, 420), income: exSnap.income };
   return {
+    conseq,
     price, deposit, bonus, financed: price - deposit, apr: 9.9, term: 48,
     monthly: now.regular, total: now.total, cost: now.cost,
     living: 230 + 250 + 120, normal: position(alex).value,
@@ -57,6 +67,7 @@ const SAMPLE_SCORES: [Cra, number][] = [["experian", 920], ["equifax", 710], ["t
 
 export default function Home() {
   const n = numbers();
+  const c = n.conseq;
   const m = (x: number) => money(x, true);
   const insolvencyTotal = INSOLVENCY_BREAKDOWN.reduce((a, b) => a + b.n, 0);
   return (
@@ -74,6 +85,19 @@ export default function Home() {
             <a href="#story" className="btn btn-ghost-photo">See the story ↓</a>
           </div>
         </div>
+      </section>
+
+      {/* THE CONSEQUENCE, IN FOUR NUMBERS */}
+      <section className="container section story-block">
+        <Reveal><span className="caption">Every financial decision has consequences</span><p className="h1">A monthly payment tells you what leaves your account. It doesn’t tell you what that leaves you with.</p></Reveal>
+        <Sequence className="conseq-flow" interval={600} items={keyed([
+          <><span>Take-home income</span><b>{money(c.income)}</b><span>a month</span></>,
+          <><span>Remaining today</span><b>{money(c.before)}</b><span>after regular costs</span></>,
+          <><span>Proposed car payment</span><b>−{money(c.payment)}</b><span>{c.pctOfIncome}% of income</span></>,
+          <><span>Remaining after</span><b>{money(c.after)}</b><span>{c.pctOfFlexibility}% of today’s flexibility committed</span></>,
+        ])} />
+        <p className="small muted">Fictional example: £1,450 regular outgoings, £180 existing loan, £200 saving and pension. Worked out by our consequence engine.</p>
+        <Reveal><p className="story-line">Before You Sign shows what changes, before you commit.</p></Reveal>
       </section>
 
       {/* THE UK PROBLEM: credit is everyday */}
@@ -327,9 +351,9 @@ export default function Home() {
         <div className="container story-block" style={{ justifyItems: "start" }}>
           <Reveal><p className="h2" style={{ color: "#d6d6d8" }}>Alex’s situation isn’t yours.</p><p className="display">Let’s understand yours.</p></Reveal>
           <Sequence className="journey-path" interval={350} items={([
-            "Credit", "Goal", "Current situation", "Future changes", "Actual offer", "Potential impact",
+            "Your situation", "Credit", "Goal", "Future changes", "Actual offer", "Consequences",
           ]).map((t, i) => <Fragment key={t}><span className="path-n">{String(i + 1).padStart(2, "0")}</span><b>{t}</b></Fragment>)} />
-          <Link href="/check" className="btn btn-on-dark">Start with my credit <Icon name="arrow" size={18} /></Link>
+          <Link href="/check" className="btn btn-on-dark">Start with my situation <Icon name="arrow" size={18} /></Link>
           <p className="tagline on-dark">Know before you commit.</p>
         </div>
       </section>
@@ -339,7 +363,7 @@ export default function Home() {
           <div className="stack" style={{ gap: 8 }}>
             <span className="caption" style={{ color: "#fff" }}>Or pick where to start</span>
             <h2 className="h1">What would you like to do?</h2>
-            <p className="lead" style={{ color: "rgba(255,255,255,.92)" }}>We’ll start with your credit, then take you through it a step at a time.</p>
+            <p className="lead" style={{ color: "rgba(255,255,255,.92)" }}>We’ll start with your situation and credit, then show what each choice changes.</p>
           </div>
           <Dashboard />
         </div>

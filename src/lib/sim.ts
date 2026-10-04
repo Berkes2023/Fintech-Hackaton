@@ -255,7 +255,7 @@ export function habit(amount: number, timesPerWeek: number) {
 
 /* ---------- what if ---------- */
 
-export type Lever = "waitBonus" | "deposit" | "apr12" | "term60" | "rentUp" | "loanEnds" | "salaryUp" | "aprUp" | "aprDown" | "term36" | "incomeDip" | "cutSpending";
+export type Lever = "waitBonus" | "deposit" | "apr12" | "term60" | "rentUp" | "loanEnds" | "salaryUp" | "aprUp" | "aprDown" | "term36" | "incomeDip" | "cutSpending" | "carCheaper";
 export const LEVERS: Record<Lever, string> = {
   waitBonus: "Wait for my bonus and add it to the deposit",
   deposit: "Put another £2,000 down",
@@ -269,9 +269,10 @@ export const LEVERS: Record<Lever, string> = {
   term36: "Choose 36 months",
   incomeDip: "My income falls 20% for 3 months",
   cutSpending: "I cut a recurring expense by £50",
+  carCheaper: "The car costs £3,000 less",
 };
 /** Amounts for the adjustable what-ifs. A negative salary change is a pay cut. */
-export interface LeverAmounts { rent: number; salary: number }
+export interface LeverAmounts { rent: number; salary: number; /** How much of the first one-off income to put towards the deposit (default: all of it). */ bonus?: number }
 
 export interface Case { picture: Picture; events: FutureEvent[]; scenario: Scenario }
 
@@ -283,9 +284,15 @@ export function applyLevers(c: Case, levers: Lever[], amounts: LeverAmounts = { 
   for (const l of levers) {
     if (l === "waitBonus") {
       const first = events.filter((e) => e.recurrence === "one_off" && e.direction === "in").sort((a, b) => a.month - b.month)[0];
-      if (first) { sc = { ...sc, amount: Math.max(0, sc.amount - first.amount), startIn: first.month }; events = events.filter((e) => e.id !== first.id); }
+      if (first) {
+        const use = Math.max(0, Math.min(first.amount, amounts.bonus ?? first.amount));
+        sc = { ...sc, amount: Math.max(0, sc.amount - use), startIn: first.month };
+        // Only the part used for the deposit leaves the timeline; any rest still arrives as one-off income.
+        events = use >= first.amount ? events.filter((e) => e.id !== first.id) : events.map((e) => (e.id === first.id ? { ...e, amount: e.amount - use } : e));
+      }
     }
     if (l === "deposit") sc = { ...sc, amount: Math.max(0, sc.amount - 2000) };
+    if (l === "carCheaper") sc = { ...sc, amount: Math.max(0, sc.amount - 3000) };
     if (l === "apr12") sc = { ...sc, apr: 12 };
     if (l === "aprUp") sc = { ...sc, apr: sc.apr + 2 };
     if (l === "aprDown") sc = { ...sc, apr: Math.max(0, sc.apr - 2) };
@@ -347,6 +354,10 @@ export interface CarState {
   finance: FinanceInput;
   /** Which terms the simulation uses: the person's own scenario or their decoded offer. */
   use: "mine" | "offer";
+  /** Optional: how much the person would personally like to keep uncommitted each month. Their benchmark, not ours. */
+  preferredBuffer?: number | null;
+  /** Whether the deposit comes out of the savings they told us about (default yes). */
+  depositFromSavings?: boolean;
   offer?: ActualOffer;
 }
 

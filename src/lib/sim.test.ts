@@ -197,3 +197,17 @@ describe("the /check car journey", () => {
     expect(applyLevers(base, ["loanEnds"]).picture.debts.find((d) => d.id === "loan")).toBeUndefined();
   });
 });
+
+describe("partial bonus and a cheaper car", () => {
+  const p0: Picture = { ...picture };
+  const ev: FutureEvent[] = [{ id: "b", label: "Bonus", amount: 3000, month: 1, direction: "in", recurrence: "one_off" }];
+  it("uses only the chosen part of a bonus, and the rest still arrives as one-off income", () => {
+    const w = applyLevers({ picture: p0, events: ev, scenario: car }, ["waitBonus"], { rent: 100, salary: 150, bonus: 1000 });
+    expect(w.scenario.amount).toBe(19000);
+    expect(w.events[0].amount).toBe(2000);
+    expect(applyLevers({ picture: p0, events: ev, scenario: car }, ["waitBonus"], { rent: 100, salary: 150, bonus: 9999 }).scenario.amount).toBe(17000);
+  });
+  it("a £3,000 cheaper car finances £3,000 less", () => {
+    expect(applyLevers({ picture: p0, events: [], scenario: car }, ["carCheaper"]).scenario.amount).toBe(17000);
+  });
+});

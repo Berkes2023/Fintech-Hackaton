@@ -54,5 +54,5 @@ export const DECISIONS: Record<DecisionKind, DecisionCopy> = {
 };
 
 /** The stages every decision passes through, in the order a person naturally thinks about them. */
-export const STAGES = ["Credit context", "Goal", "Purchase", "Finance", "My situation", "Future", "Simulation", "What if", "Decode It", "Before you sign"] as const;
+export const STAGES = ["My situation", "Credit context", "Goal", "Purchase", "Finance", "Future", "Consequences", "What if", "Decode It", "Before you sign"] as const;
 export type Stage = (typeof STAGES)[number];
