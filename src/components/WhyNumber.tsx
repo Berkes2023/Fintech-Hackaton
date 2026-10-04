@@ -26,7 +26,7 @@ export function WhyNumber({ type, v, m }: { type: ProductType; v: Values; m: Met
           </li>
         ))}
       </ul>
-      <p className="small muted">For understanding only: these show cause and effect, not what you should do.</p>
+      <p className="small muted">For understanding only: each line changes one thing and keeps everything else the same.</p>
     </section>
   );
 }

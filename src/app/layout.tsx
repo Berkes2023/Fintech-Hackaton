@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans, Inter } from "next/font/google";
 import Link from "next/link";
+import { AgreementBanner } from "@/components/Acknowledge";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import "./globals.css";
@@ -11,7 +12,7 @@ const ui = Inter({ subsets: ["latin"], weight: ["400", "600", "700"], variable: 
 
 export const metadata: Metadata = {
   title: { default: "Before You Sign", template: "%s · Before You Sign" },
-  description: "See the real cost of a loan, credit card, overdraft, Buy Now Pay Later plan or bill before you commit. We explain; you decide.",
+  description: "A monthly payment tells you what leaves your account. Before You Sign shows what it could leave you with, before you sign. We explain; you decide.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Header />
         <main>{children}</main>
         <Footer />
+        <AgreementBanner />
       </body>
     </html>
   );

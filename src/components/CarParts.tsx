@@ -9,13 +9,13 @@ export function SourceBadge({ source }: { source: Source }) {
   return <span className={`src src-${source}`}>{SOURCE_LABEL[source]}</span>;
 }
 
-/** "Why am I seeing this?": every line behind a calculated number. */
+/** "Show calculation": every line behind a calculated number, as a table. */
 export function WhyBreakdown({ title, result, extra = [], note }: { title: string; result: Explained; extra?: Line[]; note?: string }) {
   const lines = [...result.lines, ...extra];
   const total = lines.reduce((a, l) => a + l.amount, 0);
   return (
     <details className="why">
-      <summary>Why am I seeing this?</summary>
+      <summary>Show calculation</summary>
       <p className="small muted" style={{ margin: "8px 0" }}>{title}</p>
       <table className="why-table">
         <tbody>
@@ -57,7 +57,7 @@ export function ItemEditor<T extends Item>({ items, onChange, suggestions, debts
                 <div className="field"><label htmlFor={`${idPrefix}-e-${i.id}`}>Ends</label><div className="input"><select id={`${idPrefix}-e-${i.id}`} value={i.endsIn ?? 0} onChange={(e) => update(i.id, { endsIn: Number(e.target.value) || undefined } as Partial<T>)}><option value={0}>Ongoing</option>{Array.from({ length: 60 }, (_, k) => k + 1).map((m) => <option key={m} value={m}>In {m} month{m > 1 ? "s" : ""}</option>)}</select></div></div>
               </>
             )}
-            <button type="button" className="link small" onClick={() => onChange(items.filter((x) => x.id !== i.id))}>Remove</button>
+            <button type="button" className="link small" aria-label={`Remove ${i.label.trim() || "this item"}`} onClick={() => onChange(items.filter((x) => x.id !== i.id))}>Remove</button>
           </li>
         ))}
       </ul>
@@ -111,28 +111,10 @@ export function EventEditor({ events, onChange, monthName, onAdd }: {
             <div className="field"><label htmlFor={`ev-d-${e.id}`}>Income or expense</label><div className="input"><select id={`ev-d-${e.id}`} value={e.direction} onChange={(x) => update(e.id, { direction: x.target.value as "in" | "out" })}><option value="in">Income</option><option value="out">Expense</option></select></div></div>
             <div className="field"><label htmlFor={`ev-r-${e.id}`}>One-off or recurring</label><div className="input"><select id={`ev-r-${e.id}`} value={e.recurrence} onChange={(x) => update(e.id, { recurrence: x.target.value as Recurrence })}>{(Object.keys(RECUR) as Recurrence[]).map((r) => <option key={r} value={r}>{RECUR[r]}</option>)}</select></div></div>
             <div className="field"><label htmlFor={`ev-m-${e.id}`}>When</label><div className="input"><select id={`ev-m-${e.id}`} value={e.month} onChange={(x) => update(e.id, { month: Number(x.target.value) })}>{Array.from({ length: 36 }, (_, k) => k + 1).map((m) => <option key={m} value={m}>{m === 1 ? `Next month (${monthName(m)})` : monthName(m)}</option>)}</select></div></div>
-            <button type="button" className="link small" onClick={() => onChange(events.filter((x) => x.id !== e.id))}>Remove</button>
+            <button type="button" className="link small" aria-label={`Remove ${e.label.trim() || "this event"}`} onClick={() => onChange(events.filter((x) => x.id !== e.id))}>Remove</button>
           </li>
         ))}
       </ul>
     </div>
-  );
-}
-
-/** Credit context in a few lines: what it can influence, and that it isn't the same as whether something fits your situation. */
-export function CreditExplainer() {
-  return (
-    <details className="list explainer">
-      <summary>How does credit fit into this?</summary>
-      <div className="stack" style={{ marginTop: 12 }}>
-        <p className="small">There’s no single, universal UK credit score. Experian, Equifax and TransUnion each score differently, and lenders use their own criteria. Before You Sign never calculates a score for you.</p>
-        <p className="small">Your credit profile may influence which finance options and rates you’re offered. Things like repaying on time, missed payments, how much you already borrow and recent applications can all show on a credit report.</p>
-        <div className="grid-2" style={{ marginTop: 6 }}>
-          <div className="card stack" style={{ padding: 18 }}><span className="caption">Credit profile</span><p className="small">Your history of borrowing and repaying. It can affect what a lender offers.</p></div>
-          <div className="card stack" style={{ padding: 18 }}><span className="caption">Your situation</span><p className="small">Whether a new payment fits your income, spending and plans. That’s what this journey simulates.</p></div>
-        </div>
-        <p className="small"><b>A good credit profile doesn’t mean a commitment fits your situation.</b> They’re different questions.</p>
-      </div>
-    </details>
   );
 }

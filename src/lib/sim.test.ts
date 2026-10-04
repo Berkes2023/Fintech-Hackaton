@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { simulate } from "./finance";
+import { paymentConsequence, snapshot } from "./consequence";
 import {
-  applyLevers, BANNED, blankPicture, carScenario, EMPTY_CAR, eventLine, eventTag, exampleCar, illustrativeProviders, habit, hiddenCost, impact, position, recurringIncome, schedule,
-  simulateMonths, statements, toMonthly, type FutureEvent, type Picture, type Scenario,
+  amountOf, applyLevers, BANNED, blankPicture, carScenario, EMPTY_CAR, eventLine, eventTag, exampleCar, hasEnteredPicture, illustrativeProviders, habit, hiddenCost, impact,
+  position, recurringIncome, schedule, simulateMonths, statements, toMonthly, withAmount, type FutureEvent, type Picture, type Scenario,
 } from "./sim";
 
 const close = (a: number, b: number, tol = 0.05) => expect(Math.abs(a - b)).toBeLessThanOrEqual(tol);
@@ -110,6 +111,14 @@ describe("impact and hidden cost", () => {
     expect(h.cumulative.at24).toBeGreaterThan(h.cumulative.at12);
   });
 
+  it("the with-car buffer can start from savings after the deposit, matching the month-by-month simulation", () => {
+    const afterDeposit: Picture = { ...picture, reserves: { savings: picture.reserves.savings - 1000, emergency: 0 } };
+    const h = hiddenCost(picture, events, car, afterDeposit);
+    expect(h.cashflow.bufferAfter12).toBe(simulateMonths(afterDeposit, events, car, 12)[11].buffer);
+    expect(h.cashflow.bufferAfter12Without).toBe(simulateMonths(picture, events, null, 12)[11].buffer);
+    close(hiddenCost(picture, events, car).cashflow.bufferAfter12 - h.cashflow.bufferAfter12, 1000 + picture.reserves.emergency, 0.01);
+  });
+
   it("repeated spending adds up: £8 four times a week", () => {
     expect(habit(8, 4)).toEqual({ week: 32, month: 138.67, year: 1664 });
   });
@@ -129,6 +138,22 @@ describe("what if", () => {
     const rows = simulateMonths(w.picture, w.events, w.scenario, 5);
     expect(rows[0].recurringIn).toBe(2000);
     expect(rows[3].recurringIn).toBe(2500);
+  });
+
+  it("another £2,000 down: less finance, and £2,000 less cash from the start", () => {
+    const w = applyLevers(c, ["deposit"]);
+    expect(w.scenario.amount).toBe(car.amount - 2000);
+    expect(w.picture.reserves.savings).toBe(picture.reserves.savings - 2000);
+    const before = simulateMonths(picture, events, car, 12)[11].buffer, after = simulateMonths(w.picture, w.events, w.scenario, 12)[11].buffer;
+    expect(after).toBeLessThan(before);
+    // Savings aren't floored at £0, so a shortfall stays visible.
+    const none = applyLevers({ ...c, picture: { ...picture, reserves: { savings: 500, emergency: 0 } } }, ["deposit"]);
+    expect(none.picture.reserves.savings).toBe(-1500);
+    // From somewhere else: savings stay as they are.
+    expect(applyLevers(c, ["deposit"], { rent: 100, salary: 150, depositFromSavings: false }).picture.reserves).toEqual(picture.reserves);
+    // Never more than the finance itself.
+    const small = applyLevers({ ...c, scenario: { ...car, amount: 1200 } }, ["deposit"]);
+    expect([small.scenario.amount, small.picture.reserves.savings]).toEqual([0, picture.reserves.savings - 1200]);
   });
 
   it("APR and term levers move the totals the right way", () => {
@@ -219,8 +244,39 @@ describe("waiting for a loan to end, and 48 months", () => {
     const rows = simulateMonths(w.picture, w.events, w.scenario, 6);
     expect(rows.every((r) => !(r.existingDebt > 0 && r.newPayment > 0))).toBe(true);
   });
+  it("waiting for the loan and the bonus together keeps the later start", () => {
+    const ev: FutureEvent[] = [{ id: "b", label: "Bonus", amount: 3000, month: 1, direction: "in", recurrence: "one_off" }];
+    for (const order of [["waitLoan", "waitBonus"], ["waitBonus", "waitLoan"]] as const) {
+      const w = applyLevers({ picture, events: ev, scenario: car }, [...order]);
+      expect(w.scenario.startIn).toBe(4);
+      expect(w.scenario.amount).toBe(17000);
+    }
+  });
   it("term48 and a custom price cut", () => {
     expect(applyLevers({ picture, events: [], scenario: { ...car, term: 60 } }, ["term48"]).scenario.term).toBe(48);
     expect(applyLevers({ picture, events: [], scenario: car }, ["carCheaper"], { rent: 100, salary: 150, priceCut: 2000 }).scenario.amount).toBe(18000);
+  });
+});
+
+describe("the brief's demo scenario", () => {
+  it("example figures: £670 left, £5,000 savings, £200 a month regular saving, a £180 loan ending", () => {
+    const st = exampleCar();
+    const s = snapshot(st.picture);
+    expect(s).toMatchObject({ income: 2500, essentials: 1370, otherSpending: 80, debt: 180, commitments: 200, remaining: 670, buffer: 5000 });
+    expect(amountOf(st.picture.otherSaving, "regular")).toBe(200);
+    expect(st.picture.debts.find((d) => d.id === "loan")).toMatchObject({ amount: 180, endsIn: 5 });
+    expect(st.purchase).toMatchObject({ price: 25000, deposit: 5000 });
+    expect(st.events.find((e) => e.recurrence === "one_off")).toMatchObject({ amount: 3000, month: 1, direction: "in" });
+    const c = paymentConsequence(s, schedule(carScenario(st)).regular);
+    expect([Math.round(c.after), c.pctOfIncome, c.pctOfFlexibility]).toEqual([250, 16.8, 62.7]);
+  });
+
+  it("knows whether anything has been entered yet", () => {
+    const p = blankPicture();
+    expect(hasEnteredPicture(p)).toBe(false);
+    expect(hasEnteredPicture({ ...p, essentials: withAmount(p.essentials, "rent", 850) })).toBe(true);
+    expect(hasEnteredPicture({ ...p, reserves: { savings: 0, emergency: 200 } })).toBe(true);
+    expect(hasEnteredPicture({ ...p, pension: { amount: 50, alreadyDeducted: true } })).toBe(true);
+    expect(hasEnteredPicture(exampleCar().picture)).toBe(true);
   });
 });

@@ -2,16 +2,19 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { dur, money } from "@/lib/format";
 import {
   defaults, explain, fieldLabel, GLOSSARY, isProductType, moneyLabel, monthlyEquivalent, PRODUCT_TYPES, PRODUCTS,
   risks, RISK_LABEL, simulate, suggestName, understandingCheck, visibleFields, type ProductType,
 } from "@/lib/finance";
+import { snapshot } from "@/lib/consequence";
 import { productDNA, questionsToAsk } from "@/lib/dna";
 import type { Mark } from "@/lib/highlight";
-import { commitmentsStore, draftStore, MAX_COMMITMENTS, MAX_SAVED, newOptionId, savedStore, thisMonth, type Draft } from "@/lib/store";
+import { scrollMotion } from "@/lib/motion";
+import { carStore, commitmentsStore, draftStore, MAX_COMMITMENTS, MAX_SAVED, newOptionId, savedStore, thisMonth, type Draft } from "@/lib/store";
 import { AskPanel } from "./AskPanel";
+import { SourceBadge } from "./CarParts";
 import { Chart, type Series } from "./Chart";
 import { ClaimReality } from "./ClaimReality";
 import { CommitCheck } from "./CommitCheck";
@@ -50,8 +53,14 @@ export function Checker() {
   // What AI read from a document: which fields it filled, the words behind each, and what was missing.
   const [extracted, setExtracted] = useState<Extracted | null>(null);
   const [active, setActive] = useState<string | null>(null);
-  const [detailed, setDetailed] = useState(true);
+  // Quick view first; "Full breakdown" adds the deeper sections. Same numbers either way.
+  const [detailed, setDetailed] = useState(false);
   const [budget, setBudget] = useState<Budget>({ income: "", essentials: "", existing: "" });
+  const [budgetTouched, setBudgetTouched] = useState(false);
+  // Figures typed for each product type, so switching type and back doesn't lose them.
+  const lastByType = useRef<Partial<Record<ProductType, Draft>>>({});
+  // The situation entered in Plan, so "what this payment leaves" never asks for it twice.
+  const plan = snapshot(carStore.use().picture);
   const [saveName, setSaveName] = useState("");
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const saved = savedStore.use();
@@ -64,7 +73,12 @@ export function Checker() {
     if (next.type !== urlType) window.history.replaceState(null, "", `?type=${next.type}`);
   };
   const clearDoc = () => { setExtracted(null); setActive(null); };
-  const pickType = (t: ProductType) => { if (t !== type) { clearDoc(); commit({ type: t, values: defaults(t), example: false }); } };
+  const pickType = (t: ProductType) => {
+    if (t === type) return;
+    lastByType.current[type] = draft;
+    clearDoc();
+    commit(lastByType.current[t] ?? { type: t, values: defaults(t), example: false });
+  };
   const setField = (id: string, value: number | string) => {
     // Once someone types a value it's theirs: drop the AI highlight, quote and "missing" flag for that field.
     setExtracted((x) => x && {
@@ -82,8 +96,14 @@ export function Checker() {
   };
 
   const m = simulate(type, v);
-  const income = Number(budget.income) || 0;
-  const spare = income > 0 ? income - (Number(budget.essentials) || 0) - (Number(budget.existing) || 0) : 0;
+  const budgetFromPlan = !budgetTouched && plan.income > 0;
+  const shownBudget: Budget = budgetFromPlan
+    // Essential bills hold only essentials, so "+10% essentials" doesn't inflate spending or saving; the rest of the
+    // regular outgoings sit in "Repayments, spending and saving". "Left today" is the same either way.
+    ? { income: String(plan.income), essentials: String(plan.essentials), existing: String(Math.round((plan.debt + plan.otherSpending + plan.commitments) * 100) / 100) }
+    : budget;
+  const income = Number(shownBudget.income) || 0;
+  const spare = income > 0 ? income - (Number(shownBudget.essentials) || 0) - (Number(shownBudget.existing) || 0) : 0;
   const riskList = risks(type, v, m, spare);
   const label = moneyLabel(type, v, m);
   const shownRisks = detailed ? riskList : riskList.filter((r) => r.lvl !== "info");
@@ -108,7 +128,7 @@ export function Checker() {
   if (product.credit) {
     if (m.never) {
       headline = <>You borrow {money(m.principal)}. <span className="soft">At this rate you never pay it off.</span></>;
-      sub = "Your payment barely covers the interest. Try a bigger monthly amount.";
+      sub = "Your payment barely covers the interest, so the balance hardly falls.";
     } else {
       headline = <>You borrow {money(m.principal)}. <span className="soft">You pay back {money(m.total)} over {dur(m.end)}.</span></>;
       sub = m.onTop > 0.5 && m.principal > 0
@@ -185,7 +205,7 @@ export function Checker() {
     setActive(null);
     commit({ type: t, values, example: false });
     // The "aha" moment: jump straight to the decoded result.
-    requestAnimationFrame(() => document.getElementById("results-top")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    requestAnimationFrame(() => document.getElementById("results-top")?.scrollIntoView({ behavior: scrollMotion(), block: "start" }));
   };
 
   return (
@@ -221,10 +241,10 @@ export function Checker() {
                     )}
                     {f.post && <span>{f.post}</span>}
                   </div>
-                  {ev && (
+                  {ev?.quote && (
                     <div className="quote">
                       <div className="row" style={{ justifyContent: "space-between" }}>
-                        <span className={`conf ${ev.confidence}`}>{CONFIDENCE[ev.confidence]}</span>
+                        <span><span className={`conf ${ev.confidence}`}>{CONFIDENCE[ev.confidence]}</span><SourceBadge source="document_says" /></span>
                         <button type="button" className="link small" onClick={() => show(`f-${f.id}`)}>Show me where</button>
                       </div>
                       “{ev.quote}”
@@ -263,7 +283,7 @@ export function Checker() {
           )}
 
           <h1 className="headline">{headline}</h1>
-          <p className="lead" style={{ color: "var(--color-graphite)" }}>{sub}</p>
+          <p className="lead" style={{ color: "var(--color-graphite)" }}>{sub} <SourceBadge source="we_calculated" /></p>
 
           <div className="tiles">
             {tiles.map(([title, val, desc], i) => (
@@ -284,7 +304,7 @@ export function Checker() {
           {extracted && (extracted.conditions.length > 0 || extracted.source) && (
             <div className="grid-2 doc-row">
               <CostScanner conditions={extracted.conditions} onShow={show} />
-              <DocumentPanel source={extracted.source} marks={marks} active={active} redactions={extracted.redactions} />
+              <DocumentPanel source={extracted.source} marks={marks} active={active} redactions={extracted.redactions} fromFile={extracted.fromFile} />
             </div>
           )}
 
@@ -301,10 +321,12 @@ export function Checker() {
             );
           })()}
 
-          <div className="grid-2">
-            <ProductDNACard dna={dna} />
-            <Questions questions={questions} />
-          </div>
+          {detailed && (
+            <div className="grid-2">
+              <ProductDNACard dna={dna} />
+              <Questions questions={questions} />
+            </div>
+          )}
 
           <section className="card stack" aria-labelledby="chart-title">
             <div className="row" style={{ justifyContent: "space-between" }}>
@@ -318,10 +340,12 @@ export function Checker() {
             <Chart series={series} refLine={{ y: product.credit ? m.principal : m.headlineTotal, label: product.credit ? "Borrowed" : "Advertised price" }} label="Total amount paid over time" />
           </section>
 
-          <FuturePayments m={m} start={thisMonth()} perLabel={perLabel} />
-          <DigitalTwin key={`twin-${type}`} type={type} v={v} />
+          {detailed && <FuturePayments m={m} start={thisMonth()} perLabel={perLabel} />}
+          {detailed && <DigitalTwin key={`twin-${type}`} type={type} v={v} />}
           <WhatIf key={`${type}-${String(v.payType)}`} type={type} v={v} base={m} onApply={setField} />
-          <StressTest budget={budget} onChange={setBudget} payment={monthlyEquivalent(type, v, m)} perLabel={perLabel} />
+          {detailed && (
+            <StressTest budget={shownBudget} onChange={(b) => { setBudgetTouched(true); setBudget(b); }} payment={monthlyEquivalent(type, v, m)} perLabel={perLabel} fromPlan={budgetFromPlan} />
+          )}
 
           <div className="grid-2">
             <section className="card plain" aria-labelledby="plain-title">
@@ -343,7 +367,9 @@ export function Checker() {
                     <p>{r.body}</p>
                   </li>
                 ))}
-                {shownRisks.length === 0 && <li className="risk"><p>Nothing stands out. Switch to Detailed to see everything worth knowing.</p></li>}
+                {shownRisks.length === 0 && (
+                  <li className="risk"><p>{detailed ? "No checks to list for these figures. The full terms are still worth reading before you sign." : "No priority checks in the quick view. Switch to Full breakdown to see everything worth knowing."}</p></li>
+                )}
               </ul>
             </section>
           </div>

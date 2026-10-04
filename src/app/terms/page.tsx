@@ -32,13 +32,15 @@ export default function TermsPage() {
       <p>AI reads documents and explains in plain English. It can make mistakes or miss things. Every value it extracts shows the words it came from so you can check them against the original document.</p>
 
       <h2 className="h2">6. Your decision</h2>
-      <p>You remain responsible for any financial decision you make. If you’re worried about money, free and impartial help is available from MoneyHelper (0800 138 7777) and StepChange (0800 138 1111).</p>
+      <p>The decision is always yours, and you remain responsible for it. If you’re worried about money, free and impartial help is available from MoneyHelper (0800 138 7777) and StepChange (0800 138 1111).</p>
 
       <h2 className="h2">7. Using the prototype</h2>
       <p>Please don’t upload documents containing personal information, try to misuse the AI features, or overload the service. See our <Link href="/privacy" className="link">privacy policy</Link> for how information is handled.</p>
 
       <h2 className="h2">8. Liability</h2>
       <p>As a free educational prototype, it’s provided without warranties. To the extent the law allows, the team isn’t liable for decisions made using it. Nothing in these terms limits rights you have that can’t legally be limited.</p>
+
+      <p className="small muted">See also: <Link href="/privacy" className="link">Privacy policy</Link> · <Link href="/about" className="link">About Before You Sign</Link></p>
     </div>
   );
 }

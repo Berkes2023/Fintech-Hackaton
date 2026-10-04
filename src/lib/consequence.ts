@@ -88,7 +88,7 @@ export function paymentConsequence(s: Snapshot, payment: number, preferredBuffer
   const debtPctAfter = s.income > 0 ? pct1(((s.debt + p) / s.income) * 100) : null;
   const bufferGap = preferredBuffer !== undefined && preferredBuffer !== null && preferredBuffer >= 0 ? r2(after - preferredBuffer) : null;
   const out: string[] = [];
-  if (p > 0) out.push(`This would reduce your estimated monthly remaining from ${gbp(before)} to ${gbp(after)}.`);
+  if (p > 0) out.push(`Your estimated monthly remaining would change from ${gbp(before)} to ${gbp(after)} under the information you’ve provided.`);
   if (pctOfIncome !== null) out.push(`The payment is ${pctStr(pctOfIncome)} of your monthly take-home income.`);
   else out.push("You haven’t told us about any income, so we can’t show the payment as a share of it.");
   if (before <= 0) out.push(`Your regular costs already meet or exceed your regular income, so this payment would add to a monthly shortfall of about ${gbp(-after)}.`);
@@ -100,6 +100,18 @@ export function paymentConsequence(s: Snapshot, payment: number, preferredBuffer
       : `That’s ${gbp(bufferGap)} above the ${gbp(preferredBuffer!)} monthly buffer you said you’d like to keep.`);
   }
   return { payment: p, before, after, change: r2(-p), pctOfIncome, pctOfFlexibility, debtPctBefore: s.debtPct, debtPctAfter, bufferGap, sentences: out };
+}
+
+/** The six labelled figures behind a payment consequence, in the order they are shown. */
+export function paymentFigures(c: PaymentConsequence): { label: string; value: string }[] {
+  return [
+    { label: "Proposed payment", value: `${gbp(c.payment)}/month` },
+    { label: "Current estimated monthly remaining", value: gbp(c.before) },
+    { label: "After proposed commitment", value: gbp(c.after) },
+    { label: "Change", value: `${c.payment > 0 ? "−" : ""}${gbp(c.payment)}/month` },
+    { label: "Percentage of take-home income", value: c.pctOfIncome === null ? "—" : pctStr(c.pctOfIncome) },
+    { label: "Percentage of current monthly flexibility consumed", value: c.pctOfFlexibility === null ? "—" : pctStr(c.pctOfFlexibility) },
+  ];
 }
 
 /* ---------- 3. what a deposit does to your savings ---------- */
@@ -151,21 +163,33 @@ const illustrative = (label: string, amount: number, apr: number, term: number):
   id: label, label, source: "illustrative", amount, apr, term, upfrontFee: 0, monthlyFee: 0, balloon: 0, startIn: 0, fieldSources: {},
 });
 
-/** Illustrative rate scenarios: not predicted offers. Credit context never picks the rate. */
-export function aprScenarios(s: Snapshot, amount: number, term: number, aprs: number[] = [8, 12, 18], preferredBuffer?: number | null) {
-  const rows = aprs.map((apr) => scenarioRow(s, illustrative(`${apr}% APR`, amount, apr, term), preferredBuffer));
+/** The same scenario (amount, fees, balloon) at another APR or term, so the comparison matches the scenario card. */
+const variant = (base: Scenario, label: string, apr: number, term: number): Scenario => ({ ...base, id: label, label, source: "illustrative", apr, term });
+
+/** Illustrative rate scenarios on the scenario in use: not predicted offers. Credit context never picks the rate. */
+export function aprScenarios(s: Snapshot, base: Scenario, aprs: number[] = [8, 12, 18], preferredBuffer?: number | null) {
+  const rows = aprs.map((apr) => scenarioRow(s, variant(base, `${apr}% APR`, apr, base.term), preferredBuffer));
   const lo = rows[0], hi = rows[rows.length - 1];
   const note = rows.length > 1
-    ? `The ${hi.apr}% scenario would cost approximately ${gbp(Math.round(hi.cost - lo.cost))} more than the ${lo.apr}% scenario over this illustrative ${term}-month term, and ${gbp(hi.monthly - lo.monthly)} more each month.`
+    ? `The ${hi.apr}% scenario would cost approximately ${gbp(Math.round(hi.cost - lo.cost))} more than the ${lo.apr}% scenario over this illustrative ${base.term}-month term, and ${gbp(hi.monthly - lo.monthly)} more each month.`
     : "";
   return { rows, note };
 }
 
-/** The same amount and rate over two terms. */
-export function termConsequence(s: Snapshot, amount: number, apr: number, termA: number, termB: number, preferredBuffer?: number | null) {
-  const a = scenarioRow(s, illustrative(`${termA} months`, amount, apr, termA), preferredBuffer);
-  const b = scenarioRow(s, illustrative(`${termB} months`, amount, apr, termB), preferredBuffer);
+/** The same scenario (amount, rate and fees) over two terms. */
+export function termConsequence(s: Snapshot, base: Scenario, termA: number, termB: number, preferredBuffer?: number | null) {
+  const a = scenarioRow(s, variant(base, `${termA} months`, base.apr, termA), preferredBuffer);
+  const b = scenarioRow(s, variant(base, `${termB} months`, base.apr, termB), preferredBuffer);
   return { a, b, sentences: compareRows(a, b) };
+}
+
+const signed = (x: number) => `${x < 0 ? "−" : "+"}${gbp(Math.abs(x))}`;
+
+/** One neutral line on the longer of two terms: how it changes the monthly commitment and the borrowing cost. "" when the terms are equal. */
+export function termSentence(a: ScenarioRow, b: ScenarioRow): string {
+  if (a.term === b.term) return "";
+  const [short, long] = a.term < b.term ? [a, b] : [b, a];
+  return `The longer term changes the monthly commitment by ${signed(r2(long.monthly - short.monthly))} and total borrowing cost by ${signed(Math.round(long.cost - short.cost))} under these assumptions.`;
 }
 
 /* ---------- 5. deposit trade-off: less borrowing, but less cash now ---------- */
@@ -201,12 +225,12 @@ export function changePoints(p: Picture, events: FutureEvent[], sc: Scenario | n
     if (Math.abs(cur.normalLeft - prev.normalLeft) < 0.01) continue;
     const m = cur.m;
     const reasons: string[] = [];
-    for (const d of p.debts as Debt[]) if (d.endsIn === m && d.amount > 0) reasons.push(`the ${gbp(toMonthly(d.amount, d.freq))} a month ${d.label.toLowerCase()} you told us about ${ends(d.label)}`);
+    for (const d of p.debts as Debt[]) if (d.endsIn === m && d.amount > 0) reasons.push(`the ${gbp(toMonthly(d.amount, d.freq))} a month ${d.label.toLowerCase()} you told us about ${ends(d.label)} (last payment ${monthName(m - 1)})`);
     for (const e of events) if (e.month === m && e.recurrence !== "one_off") reasons.push(`${e.label.toLowerCase()} (${gbp(e.amount)} a month) ${e.recurrence === "recurring_from" ? "starts" : "stops"}`);
     if (sc && m === sc.startIn + 1 && sc.startIn > 0) reasons.push("the car payments start");
     if (sc && m === sc.startIn + sc.term + 1) reasons.push("the car finance ends");
     const why = reasons.length ? ` because ${reasons.join(" and ")}` : "";
-    out.push({ m, before: prev.normalLeft, after: cur.normalLeft, reasons, sentence: `Your situation changes in ${monthName(m)}${why}: estimated monthly remaining goes from ${gbp(prev.normalLeft)} to ${gbp(cur.normalLeft)}.` });
+    out.push({ m, before: prev.normalLeft, after: cur.normalLeft, reasons, sentence: `Based on what you’ve told us, your situation changes in ${monthName(m)}${why}: estimated monthly remaining would go from ${gbp(prev.normalLeft)} to ${gbp(cur.normalLeft)}.` });
   }
   return out;
 }
@@ -220,7 +244,8 @@ export function keyMoments(p: Picture, events: FutureEvent[], sc: Scenario, depo
   const first = sc.startIn + 1;
   out.push({ m: first, mo: { when: monthName(first), label: "First car payment", amount: `−${gbp(schedule(sc).regular)} a month` } });
   for (const e of events) out.push({ m: e.month, mo: { when: monthName(e.month), label: e.recurrence === "one_off" ? `${e.label} (one-off)` : `${e.label} ${e.recurrence === "recurring_from" ? "starts" : "stops"}`, amount: `${e.direction === "in" ? "+" : "−"}${gbp(e.amount)}${e.recurrence === "one_off" ? "" : " a month"}` } });
-  for (const d of p.debts) if (d.endsIn && d.amount > 0) out.push({ m: d.endsIn, mo: { when: monthName(d.endsIn), label: `${d.label} ${ends(d.label)}`, amount: `+${gbp(toMonthly(d.amount, d.freq))} a month back` } });
+  // Shown at the last payment (the month every other screen names), with the month the money comes back.
+  for (const d of p.debts) if (d.endsIn && d.amount > 0) out.push({ m: d.endsIn - 0.75, mo: { when: monthName(d.endsIn - 1), label: `Last payment: ${d.label.toLowerCase()}`, amount: `+${gbp(toMonthly(d.amount, d.freq))} a month back from ${monthName(d.endsIn)}` } });
   const last = sc.startIn + sc.term;
   out.push({ m: last + 0.5, mo: { when: monthName(last), label: `Car finance ends after ${sc.term} months` } });
   return out.sort((a, b) => a.m - b.m).map((x) => x.mo);
@@ -231,43 +256,132 @@ export const VERDICT_WORDS = /\b(safe|unsafe|affordable|unaffordable|you can aff
 
 /* ---------- 7. stress testing your month ---------- */
 
-export interface StressInput { id: string; label: string; /** Change to monthly remaining while it lasts (negative = less left). */ monthly: number; /** One-off change to cash savings. */ oneOff: number; /** How long a monthly change lasts, for its effect on savings; undefined = ongoing. */ months?: number }
-export interface StressRow extends StressInput { remainingBefore: number; remainingAfter: number; bufferBefore: number; bufferAfter: number; incomeAfter: number; sentence: string }
+/** Where a stress test starts: cash savings after the deposit if it comes from savings (never below £0). */
+export function stressStart(s0: Snapshot, o: { deposit: number; fromSavings: boolean }): Snapshot {
+  const used = o.fromSavings ? Math.max(0, o.deposit) : 0;
+  const buffer = r2(Math.max(0, s0.buffer - used));
+  return { ...s0, buffer, monthsOfEssentials: s0.essentials > 0 ? pct1(buffer / s0.essentials) : null };
+}
 
-/** Before vs after for each shock, from the same situation the person already entered (plus a payment if exploring one). */
-export function stressScenarios(s: Snapshot, payment: number, inputs: StressInput[]): StressRow[] {
-  const base = r2(s.remaining - Math.max(0, payment));
+export interface StressInput {
+  id: string;
+  label: string;
+  /** Change to monthly remaining while it lasts (negative = less left). */
+  monthly: number;
+  /** One-off change to cash savings. */
+  oneOff: number;
+  /** How long a monthly change lasts, for its effect on savings; undefined = ongoing. */
+  months?: number;
+  /** Change to monthly commitments (e.g. a loan ending = −180). */
+  commitments?: number;
+}
+export interface StressRow extends StressInput {
+  remainingBefore: number;
+  remainingAfter: number;
+  bufferBefore: number;
+  /** Cash savings after the scenario, never below £0. */
+  bufferAfter: number;
+  /** What the scenario needs beyond the cash savings (0 when savings cover it). */
+  shortfall: number;
+  /** Months a monthly shortfall is assumed to last for the savings figure; null when savings aren’t drawn on. */
+  drawMonths: number | null;
+  /** Existing borrowing plus the payment being explored. */
+  commitmentsBefore: number;
+  commitmentsAfter: number;
+  /** Monthly remaining minus the buffer the person chose; null when they didn’t choose one. */
+  bufferGapBefore: number | null;
+  bufferGapAfter: number | null;
+  /** Cash savings as months of essential costs; null without essential costs. */
+  monthsCoveredBefore: number | null;
+  monthsCoveredAfter: number | null;
+  incomeAfter: number;
+  sentence: string;
+}
+
+/**
+ * Before vs after for each shock, from the same situation the person already entered (plus a payment if exploring one).
+ * A shock that leaves the month short draws on savings for its length, or for `horizon` months if it is ongoing.
+ */
+export function stressScenarios(s: Snapshot, payment: number, inputs: StressInput[], opts: { horizon?: number; preferredBuffer?: number | null } = {}): StressRow[] {
+  const horizon = Math.max(1, Math.round(opts.horizon ?? 12));
+  const pb = opts.preferredBuffer !== undefined && opts.preferredBuffer !== null && opts.preferredBuffer >= 0 ? opts.preferredBuffer : null;
+  const pay = r2(Math.max(0, payment));
+  const base = r2(s.remaining - pay);
+  const commitmentsBefore = r2(s.debt + pay);
+  const covered = (cash: number) => (s.essentials > 0 ? pct1(cash / s.essentials) : null);
   return inputs.map((i) => {
     const after = r2(base + i.monthly);
-    // Savings are only drawn down if a month actually goes short; a smaller surplus doesn't touch them.
-    const bufferAfter = r2(s.buffer + i.oneOff + (after < 0 && i.months ? after * i.months : 0));
+    // Savings are only drawn on if the shock leaves the month short; a smaller surplus doesn't touch them.
+    const drawMonths = i.monthly < 0 && after < 0 ? (i.months ?? horizon) : null;
+    const drawn = drawMonths ? r2(-after * drawMonths) : 0;
+    const raw = r2(s.buffer + i.oneOff - drawn);
+    const bufferAfter = Math.max(0, raw);
+    const shortfall = r2(Math.max(0, -raw));
+    const commitmentsAfter = r2(commitmentsBefore + (i.commitments ?? 0));
     const parts: string[] = [];
     if (i.monthly !== 0) parts.push(`your estimated monthly remaining would go from ${gbp(base)} to ${gbp(after)}${i.months ? ` for ${i.months} month${i.months === 1 ? "" : "s"}` : ""}`);
-    if (i.oneOff !== 0) parts.push(`your cash savings would go from ${gbp(s.buffer)} to ${gbp(r2(s.buffer + i.oneOff))}`);
-    if (i.monthly < 0 && i.months && after < 0) parts.push(`covering the shortfall for ${i.months} months would use about ${gbp(-after * i.months)} of savings`);
+    if (i.commitments) parts.push(`your monthly commitments would go from ${gbp(commitmentsBefore)} to ${gbp(commitmentsAfter)}`);
+    if (i.oneOff > 0 || (i.oneOff < 0 && s.buffer + i.oneOff >= 0)) parts.push(`your cash savings would go from ${gbp(s.buffer)} to ${gbp(r2(s.buffer + i.oneOff))}`);
+    else if (i.oneOff < 0) parts.push(`a ${gbp(-i.oneOff)} one-off cost would ${s.buffer > 0 ? `use all ${gbp(s.buffer)} of your cash savings` : "come on top of your month"}`);
+    if (drawMonths) {
+      parts.push(i.months
+        ? `covering the shortfall for ${i.months} month${i.months === 1 ? "" : "s"} would use about ${gbp(drawn)} of savings`
+        : `if it carried on for ${drawMonths} months, covering the shortfall would use about ${gbp(drawn)} of savings`);
+    }
+    let sentence = parts.length ? `Under this scenario, ${parts.join(", and ")}, assuming everything else stayed the same.` : "Nothing changes under this scenario.";
+    if (shortfall > 0) sentence += ` That’s ${gbp(shortfall)} more than your cash savings, so it would need to come from somewhere else.`;
     return {
-      ...i, remainingBefore: base, remainingAfter: after, bufferBefore: s.buffer, bufferAfter,
-      incomeAfter: s.income, sentence: parts.length ? `Under this scenario, ${parts.join(", and ")}, assuming everything else stayed the same.` : "Nothing changes under this scenario.",
+      ...i, remainingBefore: base, remainingAfter: after, bufferBefore: s.buffer, bufferAfter, shortfall, drawMonths,
+      commitmentsBefore, commitmentsAfter,
+      bufferGapBefore: pb === null ? null : r2(base - pb), bufferGapAfter: pb === null ? null : r2(after - pb),
+      monthsCoveredBefore: covered(s.buffer), monthsCoveredAfter: covered(bufferAfter),
+      incomeAfter: s.income, sentence,
     };
   });
 }
 
 /* ---------- 8. time as a variable: buy now or wait ---------- */
 
-export interface WaitRow { months: number; savings: number; deposit: number; financed: number; monthly: number; cost: number; cashAfterDeposit: number; remainingAfter: number }
+export interface WaitRow { months: number; savings: number; deposit: number; financed: number; monthly: number; /** Total repaid. */ total: number; cost: number; cashAfterDeposit: number; remainingAfter: number }
 
 /**
- * Buy now vs wait 1, 3 or 6 months, projecting only the regular saving the person told us about (no returns).
+ * Buy now vs wait 1, 3 or 6 months (or any `months` passed), projecting only the regular saving the person told us about (no returns).
+ * The loan is the scenario in use (amount, APR, term and fees); `deposit` is the deposit already chosen.
  * `shareToDeposit` (0–1) is the part of the extra savings they choose to explore putting towards the deposit; 0 by default.
+ * `remainingAt[i]` is the regular monthly remaining (before the new payment) in the month column i’s first payment would fall,
+ * so a loan ending or a rent change the person told us about is reflected; today’s remaining is used when it isn’t given.
  */
-export function waitScenarios(s: Snapshot, o: { monthlySaving: number; price: number; deposit: number; apr: number; term: number; shareToDeposit: number; depositFromSavings: boolean; months?: number[] }): WaitRow[] {
+export function waitScenarios(s: Snapshot, o: { monthlySaving: number; scenario: Scenario; deposit: number; shareToDeposit: number; depositFromSavings: boolean; months?: number[]; remainingAt?: number[] }): WaitRow[] {
   const share = Math.min(1, Math.max(0, o.shareToDeposit));
-  return (o.months ?? [0, 1, 3, 6]).map((m) => {
+  const amount = Math.max(0, o.scenario.amount);
+  return (o.months ?? [0, 1, 3, 6]).map((m, i) => {
     const extra = r2(Math.max(0, o.monthlySaving) * m);
     const savings = r2(s.buffer + extra);
-    const deposit = Math.min(o.price, r2(o.deposit + Math.round(extra * share)));
-    const financed = Math.max(0, r2(o.price - deposit));
-    const sch = schedule({ id: "w", label: "w", source: "illustrative", amount: financed, apr: o.apr, term: o.term, upfrontFee: 0, monthlyFee: 0, balloon: 0, startIn: 0, fieldSources: {} });
-    return { months: m, savings, deposit, financed, monthly: sch.regular, cost: sch.cost, cashAfterDeposit: r2(Math.max(0, savings - (o.depositFromSavings ? deposit : 0))), remainingAfter: r2(s.remaining - sch.regular) };
+    const added = Math.min(amount, Math.round(extra * share));
+    const deposit = r2(Math.max(0, o.deposit) + added);
+    const financed = Math.max(0, r2(amount - added));
+    const sch = schedule({ ...o.scenario, amount: financed, startIn: 0 });
+    return { months: m, savings, deposit, financed, monthly: sch.regular, total: sch.total, cost: sch.cost, cashAfterDeposit: r2(Math.max(0, savings - (o.depositFromSavings ? deposit : 0))), remainingAfter: r2((o.remainingAt?.[i] ?? s.remaining) - sch.regular) };
   });
+}
+
+/* ---------- 9. returning later: last time vs now ---------- */
+
+export interface DecisionFigures { price: number; deposit: number; monthly: number; remainingBefore: number; remainingAfter: number; buffer: number; apr: number; term: number }
+
+/** Neutral “what changed” lines between a remembered decision and now. Empty when nothing changed. */
+export function decisionChanges(last: DecisionFigures, now: DecisionFigures): string[] {
+  const out: string[] = [];
+  const line = (what: string, a: number, b: number, fmt: (x: number) => string = gbp) => {
+    if (Math.abs(b - a) >= 0.005) out.push(`Your ${what} changed from ${fmt(a)} to ${fmt(b)}.`);
+  };
+  line("car price", last.price, now.price);
+  line("deposit", last.deposit, now.deposit);
+  line("APR", last.apr, now.apr, (x) => `${r2(x)}%`);
+  line("term", last.term, now.term, (x) => `${x} months`);
+  line("monthly payment", last.monthly, now.monthly);
+  line("estimated monthly remaining before the payment", last.remainingBefore, now.remainingBefore);
+  line("estimated monthly remaining after the payment", last.remainingAfter, now.remainingAfter);
+  line("cash savings", last.buffer, now.buffer);
+  return out;
 }

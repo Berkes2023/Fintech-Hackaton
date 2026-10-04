@@ -8,6 +8,7 @@ export const metadata: Metadata = { title: "Plan: simplified journey" };
 export default function SimplePlanPage() {
   return (
     <div className="container section stack" style={{ gap: 24, paddingTop: 40 }}>
+      <h1 className="sr-only">Plan a decision</h1>
       <Suspense>
         <Journey />
       </Suspense>

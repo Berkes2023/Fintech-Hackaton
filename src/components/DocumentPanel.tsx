@@ -2,17 +2,19 @@
 
 import { useEffect, useRef } from "react";
 import { segments, type Mark } from "@/lib/highlight";
+import { scrollMotion } from "@/lib/motion";
 import type { Redaction } from "@/lib/privacy";
 
 /** The document as the AI saw it, with every quoted sentence marked. "Show me where" lights one up. */
-export function DocumentPanel({ source, marks, active, redactions }: { source: string; marks: Mark[]; active: string | null; redactions: Redaction[] }) {
+export function DocumentPanel({ source, marks, active, redactions, fromFile = false }: { source: string; marks: Mark[]; active: string | null; redactions: Redaction[]; fromFile?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!active) return;
     const el = ref.current?.querySelector<HTMLElement>(`mark[data-key="${CSS.escape(active)}"]`);
-    ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const behavior = scrollMotion();
+    ref.current?.scrollIntoView({ behavior, block: "nearest" });
+    el?.scrollIntoView({ behavior, block: "center" });
   }, [active]);
 
   if (!source.trim()) return null;
@@ -31,6 +33,7 @@ export function DocumentPanel({ source, marks, active, redactions }: { source: s
           <b>Privacy shield:</b> removed {redactions.map((r) => `${r.count} ${r.kind}${r.count > 1 ? "s" : ""}`).join(", ")} before the AI saw this.
         </p>
       )}
+      {fromFile && <p className="small muted">The AI’s transcription of your file. The file itself was sent as it was; personal details we could spot are hidden here.</p>}
       <div className="doc-text">
         {segs.map((s, i) => s.key
           ? <mark key={i} data-key={s.key} className={s.key === active ? "active" : undefined}>{s.text}</mark>

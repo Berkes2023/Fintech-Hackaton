@@ -9,6 +9,7 @@ export default function StartPage() {
       <div className="stack" style={{ maxWidth: 760 }}>
         <span className="caption">Not sure where to start?</span>
         <h1 className="display">Let’s figure it out together</h1>
+        <p className="lead muted">A few quick questions, then we’ll take you to the right part of Plan.</p>
       </div>
       <StartGuide />
     </div>

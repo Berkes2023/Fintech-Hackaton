@@ -1,12 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { money } from "@/lib/format";
 import { stressTest } from "@/lib/finance";
 
 export interface Budget { income: string; essentials: string; existing: string }
 
-/** Shows what would be left each month, including if things get tighter. Consequences, not a verdict. */
-export function StressTest({ budget, onChange, payment, perLabel }: { budget: Budget; onChange: (b: Budget) => void; payment: number; perLabel: string }) {
+/**
+ * What this one payment leaves each month, including if things get tighter. Consequences, not a verdict.
+ * (The full "Stress test your month", from the Plan situation, lives at /stress-test.)
+ */
+export function StressTest({ budget, onChange, payment, perLabel, fromPlan = false }: { budget: Budget; onChange: (b: Budget) => void; payment: number; perLabel: string; fromPlan?: boolean }) {
   const income = Number(budget.income) || 0;
   const rows = income > 0 ? stressTest({ income, essentials: Number(budget.essentials) || 0, existing: Number(budget.existing) || 0, payment }) : [];
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.left)));
@@ -20,15 +24,18 @@ export function StressTest({ budget, onChange, payment, perLabel }: { budget: Bu
   return (
     <section className="card stack anchor-target" id="afford" aria-labelledby="stress-title">
       <div className="row" style={{ justifyContent: "space-between" }}>
-        <h2 id="stress-title" className="h3">Stress test your month</h2>
+        <h2 id="stress-title" className="h3">What this payment leaves each month</h2>
         <span className="small muted">Stays in your browser</span>
       </div>
-      <p className="small muted">Add rough monthly figures to see what this payment ({money(payment, true)} {perLabel}) leaves you with, now and if things get tighter.</p>
+      <p className="small muted">{fromPlan ? "See" : "Add rough monthly figures to see"} what this payment ({money(payment, true)} {perLabel}) leaves you with, now and if things get tighter.</p>
       <div className="stress-inputs">
         {field("income", "Take-home pay", "e.g. 2000")}
         {field("essentials", "Essential bills", "e.g. 1250")}
-        {field("existing", "Other repayments", "e.g. 300")}
+        {field("existing", "Repayments, spending and saving", "e.g. 300")}
       </div>
+      {fromPlan && (
+        <p className="small muted">From your Plan situation. Change any figure to try it here, or <Link href="/stress-test" className="link">stress test your month</Link> for bills, income and one-off shocks.</p>
+      )}
       {rows.length > 0 && (
         <ul className="stress-rows">
           {rows.map((r, i) => (

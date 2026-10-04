@@ -1,6 +1,7 @@
 import type { Goal } from "./journey";
 
-// "Not sure where to start?": three questions that point to places in the app, never to financial products.
+// "Not sure where to start?": a few quick questions that route into Plan (or another place in the app), never to
+// financial products. It only routes: no calculations, so it never becomes a second journey.
 
 export type Mind = "buy" | "owe" | "ahead" | "offer" | "unsure";
 export type Feel = "comfortable" | "okay" | "tight" | "struggling";
@@ -30,7 +31,10 @@ export const WHEN: Record<When, string> = {
 
 export interface Suggestion { id: string; title: string; why: string; href?: string; goal?: Goal; help?: boolean }
 
-/** Up to four places to start, most relevant first. Free help comes first whenever money is a struggle. */
+/** Plan, starting with the person's situation; the goal is chosen inside Plan. */
+const START_PLAN: Suggestion = { id: "plan", title: "Start with your situation", why: "Income, costs and savings first; choose what you’re considering when you’re ready. Nothing is committed.", href: "/plan" };
+
+/** Up to four places to start, most relevant first. Free help comes first whenever money is a struggle; buying goes into Plan. */
 export function suggest(a: Answers): Suggestion[] {
   const out: Suggestion[] = [];
   const add = (x: Suggestion) => { if (!out.some((o) => o.id === x.id)) out.push(x); };
@@ -45,9 +49,10 @@ export function suggest(a: Answers): Suggestion[] {
   switch (a.mind) {
     case "buy":
       if (a.buy) add({ id: `goal-${a.buy}`, title: "Plan it step by step", why: "Walk through the cost, your month and the ways to pay, before you commit.", goal: a.buy });
+      else add(START_PLAN);
       if (a.when === "later" || a.when === "exploring") add({ id: "save", title: "Saving towards it instead", why: "See what putting money aside each month adds up to by the time you need it.", goal: "invest" });
-      if (a.when === "now") add({ id: "decode", title: "Check an offer you’ve been given", why: "Paste or snap the terms and see the real cost and the small print.", href: "/small-print" });
-      add({ id: "reverse", title: "What could a monthly budget cover?", why: "Start from what you can afford each month and see what it means over different lengths.", href: "/reverse" });
+      if (a.when === "now") add({ id: "decode", title: "Read the small print", why: "Been given an offer? Paste or snap the terms and see the real cost and the conditions.", href: "/small-print" });
+      add({ id: "reverse", title: "What could a monthly budget cover?", why: "Start from a monthly amount you have in mind and see what it means over different lengths.", href: "/reverse" });
       break;
     case "owe":
       add({ id: "map", title: "See everything you already pay", why: "Your commitments on one timeline, with the monthly total and when each one ends.", href: "/commitments" });
@@ -60,11 +65,11 @@ export function suggest(a: Answers): Suggestion[] {
       add({ id: "rates", title: "Where interest rates are now", why: "Bank Rate affects savings and borrowing.", href: "/rates" });
       break;
     case "offer":
-      add({ id: "decode", title: "Decode the offer", why: "Paste or snap the terms: real cost, hidden conditions and the exact sentences behind them.", href: "/small-print" });
-      add({ id: "diff", title: "Got two offers? Compare them", why: "Clause by clause, with the biggest differences listed.", href: "/diff" });
+      add({ id: "decode", title: "Read the small print", why: "Paste or snap the terms: real cost, hidden conditions and the exact sentences behind them.", href: "/small-print" });
+      add({ id: "diff", title: "Got two written offers? See where they differ", why: "Clause by clause, with the biggest differences listed.", href: "/diff" });
       break;
     default:
-      add({ id: "goals", title: "Have a look at what people plan", why: "Buying a car or a home, borrowing, a big purchase or saving. Pick one to explore, nothing is committed.", href: "/#dashboard" });
+      add(START_PLAN);
       add({ id: "learn", title: "Learn the words first", why: "APR, EAR, minimum payments and more, in plain English.", href: "/learn" });
       add({ id: "map", title: "See everything you already pay", why: "A calm place to start: what goes out each month.", href: "/commitments" });
   }

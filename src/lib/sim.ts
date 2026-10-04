@@ -4,7 +4,7 @@ import { monthlyRate } from "./finance";
 
 // The car decision simulator. CODE CALCULATES, AI EXPLAINS.
 // Three separate ideas, never blended into one score:
-//   1. Credit profile: self-reported, only used to pick ILLUSTRATIVE example rates.
+//   1. Credit profile: self-reported context only. It never picks a rate and never feeds the month.
 //   2. Financial position: income, spending, borrowing, reserves and known future events.
 //   3. Decision impact: what a finance scenario does to that position, month by month.
 
@@ -235,9 +235,13 @@ export interface HiddenCost {
   cumulative: { at12: number; at24: number; atTerm: number; existingAt12: number };
 }
 
-export function hiddenCost(p: Picture, events: FutureEvent[], sc: Scenario): HiddenCost {
+/**
+ * `withCarStart` is the picture the with-car run starts from (e.g. savings after a deposit taken from them),
+ * so the buffer matches the rest of the journey. The without-car run always starts from `p`.
+ */
+export function hiddenCost(p: Picture, events: FutureEvent[], sc: Scenario, withCarStart: Picture = p): HiddenCost {
   const sch = schedule(sc);
-  const withCar = simulateMonths(p, events, sc, 12);
+  const withCar = simulateMonths(withCarStart, events, sc, 12);
   const without = simulateMonths(p, events, null, 12);
   const sumTo = (k: number) => r2(sch.payments.slice(0, k).reduce((a, b) => a + b, 0) + (k > sc.startIn ? sc.upfrontFee : 0));
   return {
@@ -275,7 +279,10 @@ export const LEVERS: Record<Lever, string> = {
   term48: "Choose 48 months",
 };
 /** Amounts for the adjustable what-ifs. A negative salary change is a pay cut. */
-export interface LeverAmounts { rent: number; salary: number; /** How much of the first one-off income to put towards the deposit (default: all of it). */ bonus?: number; /** How much cheaper the car is (default £3,000). */ priceCut?: number }
+export interface LeverAmounts {
+  rent: number; salary: number; /** How much of the first one-off income to put towards the deposit (default: all of it). */ bonus?: number; /** How much cheaper the car is (default £3,000). */ priceCut?: number;
+  /** Whether the extra deposit comes out of cash savings (default yes). Savings may go below £0 so the shortfall stays visible. */ depositFromSavings?: boolean;
+}
 
 export interface Case { picture: Picture; events: FutureEvent[]; scenario: Scenario }
 
@@ -289,12 +296,18 @@ export function applyLevers(c: Case, levers: Lever[], amounts: LeverAmounts = { 
       const first = events.filter((e) => e.recurrence === "one_off" && e.direction === "in").sort((a, b) => a.month - b.month)[0];
       if (first) {
         const use = Math.max(0, Math.min(first.amount, amounts.bonus ?? first.amount));
-        sc = { ...sc, amount: Math.max(0, sc.amount - use), startIn: first.month };
+        // Keep any later start already chosen (e.g. waiting for a loan to end), so the two never overlap again.
+        sc = { ...sc, amount: Math.max(0, sc.amount - use), startIn: Math.max(sc.startIn, first.month) };
         // Only the part used for the deposit leaves the timeline; any rest still arrives as one-off income.
         events = use >= first.amount ? events.filter((e) => e.id !== first.id) : events.map((e) => (e.id === first.id ? { ...e, amount: e.amount - use } : e));
       }
     }
-    if (l === "deposit") sc = { ...sc, amount: Math.max(0, sc.amount - 2000) };
+    if (l === "deposit") {
+      // A larger deposit means less finance, but more cash upfront: the extra comes out of savings (not floored at £0).
+      const extra = Math.min(2000, Math.max(0, sc.amount));
+      sc = { ...sc, amount: sc.amount - extra };
+      if (amounts.depositFromSavings !== false) picture = { ...picture, reserves: { ...picture.reserves, savings: picture.reserves.savings - extra } };
+    }
     if (l === "carCheaper") sc = { ...sc, amount: Math.max(0, sc.amount - (amounts.priceCut ?? 3000)) };
     if (l === "term48") sc = { ...sc, term: 48 };
     if (l === "waitLoan") {
@@ -352,7 +365,7 @@ export interface ActualOffer {
 /** The finance scenario being explored. null means "use the worked-out default". */
 export interface FinanceInput { amount: number | null; apr: number | null; term: number | null; fee: number }
 
-export type CarGoal = "car" | "home" | "improve" | "purchase" | "borrowing" | "education" | "other";
+export type CarGoal = "car" | "home" | "improve" | "purchase" | "borrowing" | "education" | "invest" | "other";
 
 export interface CarState {
   goal?: CarGoal;
@@ -392,6 +405,13 @@ export function withAmount<T extends Item>(list: T[], id: string, amount: number
 }
 export const amountOf = (list: Item[], id: string) => list.find((i) => i.id === id)?.amount ?? 0;
 
+/** True once the person has entered any amount about their situation (income, costs, borrowing, saving or reserves). */
+export function hasEnteredPicture(p: Picture): boolean {
+  const any = (l: Item[]) => l.some((i) => i.amount > 0);
+  return any(p.income) || any(p.essentials) || any(p.discretionary) || any(p.debts) || any(p.otherSaving)
+    || p.reserves.savings > 0 || p.reserves.emergency > 0 || p.pension.amount > 0;
+}
+
 /** Starts empty: nothing is assumed about the person. */
 export const EMPTY_CAR: CarState = {
   purchase: { price: 0, deposit: 0, saved: 0 },
@@ -402,7 +422,12 @@ export const EMPTY_CAR: CarState = {
   use: "mine",
 };
 
-/** "Use example figures": a realistic example, clearly marked as an example in the UI. */
+/**
+ * "Use example figures": the brief's demo scenario, clearly marked as an example in the UI.
+ * £2,500 take-home; £1,370 essentials; £80 other spending; a £180/month loan with its last payment in month 4;
+ * £200/month regular saving; £5,000 savings; a £25,000 car with a £5,000 deposit; a £3,000 one-off bonus next month.
+ * Estimated monthly remaining: £670.
+ */
 export function exampleCar(): CarState {
   const p = blankPicture();
   const fill = <T extends Item>(l: T[], v: Record<string, number>) => l.map((i) => (i.id in v ? { ...i, amount: v[i.id], origin: "mock" as Origin } : i));
@@ -412,11 +437,12 @@ export function exampleCar(): CarState {
     picture: {
       ...p,
       income: fill(p.income, { salary: 2500 }),
-      essentials: fill(p.essentials, { rent: 850, bills: 230, food: 250, transport: 120 }),
-      discretionary: fill(p.discretionary, { subs: 40, fun: 210 }),
+      essentials: fill(p.essentials, { rent: 850, bills: 200, food: 220, transport: 100 }),
+      discretionary: fill(p.discretionary, { subs: 40, fun: 40 }),
       debts: fill(p.debts, { loan: 180 }).map((d) => (d.id === "loan" ? { ...d, endsIn: 5 } : d)),
-      reserves: { savings: 1500, emergency: 500 },
-      pension: { amount: 125, alreadyDeducted: true, employer: 75 },
+      reserves: { savings: 5000, emergency: 0 },
+      pension: { amount: 0, alreadyDeducted: false, employer: 0 },
+      otherSaving: fill(p.otherSaving, { regular: 200 }),
     },
     credit: { scores: [{ creditProvider: "experian", creditScale: "experian", creditScore: 920, creditBand: "Good", creditSource: "USER_SUPPLIED" }], creditSource: "USER_SUPPLIED" },
     events: [

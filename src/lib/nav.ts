@@ -12,9 +12,9 @@ export const NAV: NavGroup[] = [
   {
     key: "products",
     label: "Products",
-    intro: "Start with a decision, an offer or your month.",
+    intro: "Plan a decision, read an offer, stress test your month, or check what one product costs.",
     links: [
-      { href: "/plan", title: "Plan a decision step by step", desc: "Your situation, credit, the decision and what it changes", icon: "spark" },
+      { href: "/plan", title: "Plan a decision", desc: "Your situation, credit, the decision and what it changes", icon: "spark" },
       { href: "/small-print", title: "Read the small print", desc: "Paste or upload terms; see what they mean for you", icon: "doc" },
       { href: "/stress-test", title: "Stress test your month", desc: "What if bills rise, income falls or something unexpected happens?", icon: "wallet" },
       { href: "/cost-checker?type=loan", title: "Loans", desc: "Personal loans, car and store finance", icon: "loan" },
@@ -29,7 +29,7 @@ export const NAV: NavGroup[] = [
       eyebrow: "Start here",
       title: "Thinking about a car, a home or a big purchase?",
       body: "Tell us about your situation and see what the decision could change, before you commit.",
-      cta: "Plan step by step",
+      cta: "Plan a decision",
     },
   },
   {
@@ -59,6 +59,7 @@ export const NAV: NavGroup[] = [
       { href: "/learn#apr", title: "What APR really means", desc: "Why the headline rate isn’t the whole story", icon: "chart" },
       { href: "/learn#minimum", title: "Minimum payments", desc: "Why they keep you in debt for years", icon: "card" },
       { href: "/learn#bnpl", title: "BNPL explained", desc: "How pay-later plans work in the UK", icon: "bnpl" },
+      { href: "/learn#credit", title: "Credit scores in the UK", desc: "Three agencies, three scales, and what shapes a profile", icon: "shield" },
       { href: "/rates", title: "Interest rates", desc: "Live Bank Rate vs the Fed and ECB", icon: "chart" },
     ],
     feature: {
@@ -72,20 +73,21 @@ export const NAV: NavGroup[] = [
   {
     key: "about",
     label: "About",
-    intro: "How Before You Sign works, and what it doesn’t do.",
+    intro: "Our approach, where our numbers come from, and what’s next.",
     links: [
       { href: "/about#how", title: "How it works", desc: "One journey, from your situation to the small print", icon: "spark" },
       { href: "/about#ai", title: "Calculations & responsible AI", desc: "Code calculates. AI explains.", icon: "calc" },
       { href: "/about#dont", title: "What we don’t do", desc: "No lending, no advice, no rankings", icon: "help" },
       { href: "/about#privacy", title: "Privacy & your data", desc: "What stays on your device, and what AI sees", icon: "shield" },
-      { href: "/#sources", title: "Sources & methodology", desc: "Every statistic, with its official source", icon: "book" },
+      { href: "/agreement", title: "User terms & privacy statement", desc: "The short agreement, and your acknowledgement", icon: "doc" },
+      { href: "/about#sources", title: "Sources & methodology", desc: "Every statistic, with its official source", icon: "book" },
       { href: "/about#roadmap", title: "Roadmap", desc: "Ideas we haven’t built yet", icon: "chart" },
     ],
     feature: {
       href: "/about",
       eyebrow: "Our approach",
-      title: "We explain. You decide.",
-      body: "We never tell you which product to choose. The decision stays with you.",
+      title: "How Before You Sign works",
+      body: "What we calculate, what AI does, what we don’t do, and what stays on your device.",
       cta: "About Before You Sign",
     },
   },

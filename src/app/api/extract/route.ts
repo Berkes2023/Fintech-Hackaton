@@ -29,7 +29,7 @@ const SCHEMA = {
           id: { type: "string" },
           value: str("A plain number (no £ or %), or an option value for select fields."),
           quote: str("The exact words from the document this value comes from, copied verbatim, under 160 characters."),
-          confidence: { type: "string", enum: ["high", "medium", "low"], description: "high = stated outright; medium = worked out from clear wording; low = ambiguous." },
+          confidence: { type: "string", enum: ["high", "medium", "low"], description: "high = stated outright; medium = stated but indirectly (e.g. in a table or footnote); low = ambiguous wording" },
         },
       },
     },
@@ -136,7 +136,7 @@ export async function POST(req: Request) {
     });
     const finish = res.candidates?.[0]?.finishReason;
     if (res.promptFeedback?.blockReason || (finish && BLOCKED.includes(finish))) return Response.json({ error: "refused" }, { status: 422, headers: MODEL_HEADER });
-    if (!res.text) return Response.json({ error: "empty" }, { status: 502, headers: MODEL_HEADER });
+    if (!res.text) return Response.json({ error: "upstream" }, { status: STATUS.upstream, headers: MODEL_HEADER });
     // Validate before the UI sees anything: malformed or invented structure is dropped here.
     const clean = validateExtraction(JSON.parse(res.text));
     if (!clean) return Response.json({ error: "invalid_json" }, { status: 502, headers: MODEL_HEADER });

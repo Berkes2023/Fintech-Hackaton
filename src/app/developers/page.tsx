@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { buildLabel, parseLabelRequest } from "@/lib/api";
-import { money } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Developer API" };
 
@@ -14,16 +14,16 @@ export default function DevelopersPage() {
   return (
     <div className="container section" style={{ paddingTop: 56 }}>
       <div className="stack" style={{ maxWidth: 760 }}>
-        <span className="caption">Developer API · Vision</span>
+        <span className="caption">Roadmap · Developer API</span>
         <h1 className="display">A transparency layer for financial products</h1>
         <p className="lead muted">
-          Different products, one language. Any comparison site, bank, university or charity can send a product’s terms and get the same Money Label back.
+          Different products, one language. One day, a comparison site, bank, university or charity could send a product’s terms and get the same Money Label back.
         </p>
       </div>
 
       <div className="prose">
         <h2 className="h2">Try it</h2>
-        <p>It’s live now. No key, no personal data, and no AI: the same tested maths as this site.</p>
+        <p>A small working demo: no key, no personal data and no AI, using the same tested maths as this site. Not a supported service.</p>
       </div>
       <pre className="code"><code>{`curl -X POST https://before-you-sign-cyan.vercel.app/api/v1/label \\
   -H "Content-Type: application/json" \\
@@ -40,23 +40,7 @@ export default function DevelopersPage() {
           <li>The response has a <code>summary</code>, the Money Label <code>rows</code>, ranked <code>risks</code> and <code>plain_english</code> sentences.</li>
           <li>Open to any website (CORS enabled). Figures are estimates, not advice.</li>
         </ul>
-
-        <h2 className="h2">Next: right where people decide</h2>
-        <p>A browser extension could add a “Before you sign” button beside any finance offer while you shop, at exactly the moment of decision.</p>
-      </div>
-
-      <div className="ext-mock" aria-label="Mock-up of a browser extension">
-        <div className="ext-page">
-          <p className="caption">shop.example · checkout</p>
-          <p className="h3">Laptop Pro 14”</p>
-          <p className="lead">Only <b>£83/month</b> with Easy Pay</p>
-        </div>
-        <div className="ext-pop">
-          <span className="caption">Before You Sign</span>
-          <p className="h3">£83 a month sounds like {money(83 / 30.44, true)} a day</p>
-          <p className="small">If it runs for 36 months: <b>{money(83 * 36)}</b>, before interest and fees.</p>
-          <p className="small muted">The advert doesn’t say the APR or fees. Ask before you commit.</p>
-        </div>
+        <p><Link href="/firewall" className="link">See the Commitment Firewall concept</Link></p>
       </div>
     </div>
   );

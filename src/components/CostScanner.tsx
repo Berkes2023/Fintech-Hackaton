@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SourceBadge } from "./CarParts";
 import type { Condition } from "./PasteFill";
 
 const KIND: Record<string, string> = {
@@ -35,8 +36,8 @@ export function CostScanner({ conditions, onShow }: { conditions: Condition[]; o
             </button>
             {open === i ? (
               <ol className="clause">
-                <li><span className="caption">Original wording</span><p className="quote">“{c.quote}”</p></li>
-                <li><span className="caption">What it means</span><p>{c.plain}</p></li>
+                <li><span className="caption">Original wording <SourceBadge source="document_says" /></span><p className="quote">“{c.quote}”</p></li>
+                <li><span className="caption">What it means <SourceBadge source="ai_explained" /></span><p>{c.plain}</p></li>
                 {c.why && <li><span className="caption">Why it matters</span><p>{c.why}</p></li>}
                 <li><span className="caption">Evidence</span><button type="button" className="link small" onClick={() => onShow(`cond-${i}`)}>Show me where in the document</button></li>
                 <li><span className="caption">Confidence</span><p>{CONF[c.confidence] ?? "Medium"}</p></li>

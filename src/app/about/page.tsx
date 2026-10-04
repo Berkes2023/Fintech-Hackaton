@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PrivacySummary } from "@/components/PrivacySummary";
+import { Sources } from "@/components/Sources";
 
 export const metadata: Metadata = { title: "About Before You Sign" };
 
-// One About page, replacing the separate Responsible AI, How we calculate, What we don't do and Our promise pages.
+// One About page: how it works, calculations & responsible AI, what we don't do, privacy, sources and the roadmap.
+// The central statement ("We explain. You decide.") is said once, in the heading.
 export default function AboutPage() {
   return (
     <div className="container section stack about" style={{ paddingTop: 56, gap: 48 }}>
@@ -24,16 +26,16 @@ export default function AboutPage() {
           <li><b>What if?</b><span>Wait for a bonus, change the deposit, the term or the rate, and see it recalculated.</span></li>
           <li><b>The small print</b><span>Paste or upload the real agreement; its terms run through the same maths.</span></li>
         </ol>
-        <Link href="/plan" className="btn btn-dark" style={{ justifySelf: "start" }}>Plan a decision step by step</Link>
+        <Link href="/plan" className="btn btn-dark" style={{ justifySelf: "start" }}>Plan a decision</Link>
       </section>
 
       <section id="ai" className="anchor-target stack">
         <h2 className="h1">Calculations & responsible AI</h2>
         <p className="lead"><b>Code calculates. AI explains.</b></p>
         <div className="grid-3">
-          <div className="list stack"><span className="caption">Code calculates</span><p className="small">Repayments, totals, cash flow, buffers, percentages, timelines, what-ifs and the educational credit estimate are deterministic, tested TypeScript. Same inputs, same answer.</p></div>
-          <div className="list stack"><span className="caption">AI explains</span><p className="small">Google Gemini reads pasted or uploaded terms and quotes the exact words behind each value, and answers questions in plain English. It never produces the figures.</p></div>
-          <div className="list stack"><span className="caption">You can see where it came from</span><p className="small">Labels show whether a number is something <b>you told us</b>, <b>we calculated</b>, the <b>document says</b>, <b>AI explained</b>, an <b>illustrative scenario</b> or an <b>official source</b>.</p></div>
+          <div className="list stack"><span className="caption">Calculations</span><p className="small">Repayments, totals, cash flow, buffers, percentages, timelines, what-ifs and the educational credit estimate are deterministic, tested TypeScript. Same inputs, same answer.</p></div>
+          <div className="list stack"><span className="caption">AI</span><p className="small">Google Gemini reads pasted or uploaded terms and quotes the exact words behind each value, and answers questions in plain English. It never produces the figures.</p></div>
+          <div className="list stack"><span className="caption">Labels</span><p className="small">Labels show whether a number is something <b>you told us</b>, <b>we calculated</b>, the <b>document says</b>, <b>AI explained</b>, an <b>illustrative scenario</b> or an <b>official source</b>.</p></div>
         </div>
         <details className="why">
           <summary>Show the calculation methods</summary>
@@ -52,7 +54,7 @@ export default function AboutPage() {
             <li>It explains and never recommends, ranks or predicts approval.</li>
             <li>Every value read from a document shows the exact words it came from; if something isn’t in the document, it says so rather than guessing.</li>
             <li>If the document states its own monthly payment or total, we compare it with our calculation.</li>
-            <li>Pasted text is treated as data, never as instructions.</li>
+            <li>It’s told to treat pasted text as data, never as instructions.</li>
             <li>If you mention money worries, it points to free help from MoneyHelper and StepChange.</li>
             <li>If AI is off or unavailable, everything except reading documents and answering questions still works.</li>
           </ul>
@@ -68,8 +70,8 @@ export default function AboutPage() {
           <li>We don’t provide regulated financial advice, and we aren’t authorised by the FCA.</li>
           <li>We don’t rank any product as “best”.</li>
           <li>We don’t claim our educational credit estimate is an official Experian, Equifax or TransUnion score.</li>
-          <li>We don’t let AI invent financial calculations.</li>
-          <li>We don’t sell or broker financial products.</li>
+          <li>We don’t let AI invent deterministic financial calculations.</li>
+          <li>We don’t sell or broker financial products in this prototype.</li>
           <li>We don’t connect to your bank or check your credit file.</li>
         </ul>
       </section>
@@ -79,16 +81,21 @@ export default function AboutPage() {
         <PrivacySummary />
       </section>
 
+      <section id="sources" className="anchor-target stack">
+        <h2 className="h1">Sources &amp; methodology</h2>
+        <Sources />
+      </section>
+
       <section id="roadmap" className="anchor-target stack">
         <h2 className="h1">Roadmap</h2>
-        <p className="muted">Ideas we haven’t built yet. None of these are live features.</p>
+        <p className="muted">Ideas we haven’t built into Before You Sign. Where a small demo exists, we say so.</p>
         <div className="tool-grid">
+          <div className="tool-card"><b>Authorised credit-data integration</b><span className="small muted">Bring in your credit report with your consent, instead of typing a score.</span></div>
           <div className="tool-card"><b>Open Banking</b><span className="small muted">Fill in your situation from your own accounts, with your permission.</span></div>
-          <div className="tool-card"><b>Authorised credit data</b><span className="small muted">Bring in your credit report with consent, instead of typing a score.</span></div>
           <div className="tool-card"><b>Provider and broker integrations</b><span className="small muted">Real, verified quotes, never ranked and never invented.</span></div>
-          <div className="tool-card"><b>Revisit a decision</b><span className="small muted">Come back after a month, update your situation and see what changed. Today this works only on your own device.</span></div>
-          <Link href="/firewall" className="tool-card"><b>Commitment Firewall (concept)</b><span className="small muted">A future browser or checkout companion that could help you inspect a commitment before completing it. See the demo.</span></Link>
-          <Link href="/developers" className="tool-card"><b>Developer API (prototype)</b><span className="small muted">A working, AI-free Money Label endpoint other websites could use. Not a supported service.</span></Link>
+          <div className="tool-card"><b>Returning-user decision comparison</b><span className="small muted">Come back later, update your situation and compare it with a decision you remembered. The current version only remembers on this device.</span></div>
+          <Link href="/firewall" className="tool-card"><b>Commitment Firewall (concept)</b><span className="small muted">An optional future browser/checkout companion helping users inspect a financial commitment before completing it. A small demo exists.</span></Link>
+          <Link href="/developers" className="tool-card"><b>Developer API (experimental demo)</b><span className="small muted">An AI-free Money Label endpoint other websites could one day use. A demo, not a supported service.</span></Link>
         </div>
       </section>
     </div>
