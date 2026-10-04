@@ -228,3 +228,46 @@ export function keyMoments(p: Picture, events: FutureEvent[], sc: Scenario, depo
 
 /** Words the consequence engine must never use. */
 export const VERDICT_WORDS = /\b(safe|unsafe|affordable|unaffordable|you can afford|you can'?t afford|irresponsible|best option|best deal|you should|don'?t buy|you will be approved)\b/i;
+
+/* ---------- 7. stress testing your month ---------- */
+
+export interface StressInput { id: string; label: string; /** Change to monthly remaining while it lasts (negative = less left). */ monthly: number; /** One-off change to cash savings. */ oneOff: number; /** How long a monthly change lasts, for its effect on savings; undefined = ongoing. */ months?: number }
+export interface StressRow extends StressInput { remainingBefore: number; remainingAfter: number; bufferBefore: number; bufferAfter: number; incomeAfter: number; sentence: string }
+
+/** Before vs after for each shock, from the same situation the person already entered (plus a payment if exploring one). */
+export function stressScenarios(s: Snapshot, payment: number, inputs: StressInput[]): StressRow[] {
+  const base = r2(s.remaining - Math.max(0, payment));
+  return inputs.map((i) => {
+    const after = r2(base + i.monthly);
+    // Savings are only drawn down if a month actually goes short; a smaller surplus doesn't touch them.
+    const bufferAfter = r2(s.buffer + i.oneOff + (after < 0 && i.months ? after * i.months : 0));
+    const parts: string[] = [];
+    if (i.monthly !== 0) parts.push(`your estimated monthly remaining would go from ${gbp(base)} to ${gbp(after)}${i.months ? ` for ${i.months} month${i.months === 1 ? "" : "s"}` : ""}`);
+    if (i.oneOff !== 0) parts.push(`your cash savings would go from ${gbp(s.buffer)} to ${gbp(r2(s.buffer + i.oneOff))}`);
+    if (i.monthly < 0 && i.months && after < 0) parts.push(`covering the shortfall for ${i.months} months would use about ${gbp(-after * i.months)} of savings`);
+    return {
+      ...i, remainingBefore: base, remainingAfter: after, bufferBefore: s.buffer, bufferAfter,
+      incomeAfter: s.income, sentence: parts.length ? `Under this scenario, ${parts.join(", and ")}, assuming everything else stayed the same.` : "Nothing changes under this scenario.",
+    };
+  });
+}
+
+/* ---------- 8. time as a variable: buy now or wait ---------- */
+
+export interface WaitRow { months: number; savings: number; deposit: number; financed: number; monthly: number; cost: number; cashAfterDeposit: number; remainingAfter: number }
+
+/**
+ * Buy now vs wait 1, 3 or 6 months, projecting only the regular saving the person told us about (no returns).
+ * `shareToDeposit` (0–1) is the part of the extra savings they choose to explore putting towards the deposit; 0 by default.
+ */
+export function waitScenarios(s: Snapshot, o: { monthlySaving: number; price: number; deposit: number; apr: number; term: number; shareToDeposit: number; depositFromSavings: boolean; months?: number[] }): WaitRow[] {
+  const share = Math.min(1, Math.max(0, o.shareToDeposit));
+  return (o.months ?? [0, 1, 3, 6]).map((m) => {
+    const extra = r2(Math.max(0, o.monthlySaving) * m);
+    const savings = r2(s.buffer + extra);
+    const deposit = Math.min(o.price, r2(o.deposit + Math.round(extra * share)));
+    const financed = Math.max(0, r2(o.price - deposit));
+    const sch = schedule({ id: "w", label: "w", source: "illustrative", amount: financed, apr: o.apr, term: o.term, upfrontFee: 0, monthlyFee: 0, balloon: 0, startIn: 0, fieldSources: {} });
+    return { months: m, savings, deposit, financed, monthly: sch.regular, cost: sch.cost, cashAfterDeposit: r2(Math.max(0, savings - (o.depositFromSavings ? deposit : 0))), remainingAfter: r2(s.remaining - sch.regular) };
+  });
+}

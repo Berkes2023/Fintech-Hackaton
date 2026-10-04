@@ -72,3 +72,8 @@ export const carStore = createStore<CarState>("bys:car4", EMPTY_CAR, (x): x is C
   const s = x as CarState;
   return !!s && typeof s === "object" && !!s.purchase && !!s.picture && Array.isArray(s.picture.income) && Array.isArray(s.events) && !!s.credit && Array.isArray(s.credit.scores) && !!s.finance;
 });
+
+/** A decision someone chose to remember on this device, so they can compare "last time" with "now". Browser-only. */
+export interface SavedDecision { savedAt: string; price: number; deposit: number; monthly: number; remainingBefore: number; remainingAfter: number; buffer: number; apr: number; term: number }
+export const decisionStore = createStore<SavedDecision[]>("bys:decisions", [], (x): x is SavedDecision[] =>
+  Array.isArray(x) && x.every((d) => !!d && typeof (d as SavedDecision).savedAt === "string" && typeof (d as SavedDecision).monthly === "number"));

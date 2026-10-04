@@ -20,7 +20,11 @@ export function StartGuide() {
   const idx = order.indexOf(q);
   const answer = (patch: Answers, next: Q) => { setA((x) => ({ ...x, ...patch })); setQ(next); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const back = () => setQ(order[Math.max(0, idx - 1)]);
-  const openGoal = (g: Goal) => { journeyStore.set(startGoal(journeyStore.get(), g)); router.push("/plan?step=1"); };
+  // The guide only routes: borrowing decisions go into Plan (situation and credit first); saving uses its simple wizard.
+  const openGoal = (g: Goal) => {
+    if (g === "invest") { journeyStore.set(startGoal(journeyStore.get(), g)); router.push("/plan/simple?step=1"); return; }
+    router.push(`/plan?goal=${g}`);
+  };
 
   const Choice = ({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) => (
     <button type="button" className={`choice${on ? " on" : ""}`} onClick={onClick}><b style={{ fontSize: 20 }}>{label}</b></button>

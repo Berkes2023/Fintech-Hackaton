@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en-GB" className={`${display.variable} ${ui.variable}`}>
       <body>
         <div className="promo">
-          Built for UKFinnovator Bristol 2026: Money, Explained. <Link href="/responsible-ai">See how it works</Link>
+          Built for UKFinnovator Bristol 2026: Money, Explained. <Link href="/about">See how it works</Link>
         </div>
         <Header />
         <main>{children}</main>

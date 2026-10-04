@@ -119,7 +119,7 @@ export function Journey() {
           <p className="muted">Start with what you want to do. We’ll walk you through it step by step.</p>
           <div className="choice-grid">
             {(Object.keys(GOALS) as Goal[]).map((g) => (
-              <button key={g} type="button" className={`choice${s.goal === g ? " on" : ""}`} onClick={() => { if (g === "car") { router.push("/check?step=3"); return; } journeyStore.set(startGoal(s, g)); setPicked(null); setLevers([]); go(1); }}>
+              <button key={g} type="button" className={`choice${s.goal === g ? " on" : ""}`} onClick={() => { if (g === "car") { router.push("/plan?goal=car"); return; } journeyStore.set(startGoal(s, g)); setPicked(null); setLevers([]); go(1); }}>
                 <span className="icon"><Icon name={GOALS[g].icon} size={24} /></span>
                 <b>{GOALS[g].label}</b>
                 <span className="small muted">{GOALS[g].blurb}</span>
@@ -410,14 +410,14 @@ export function Journey() {
           {!invest && chosen && <p className="lead muted">{chosen.provider}: {chosen.product}. {chosen.regular ? `${money(chosen.regular, true)} a month for ${dur(chosen.months)}, ` : ""}{money(chosen.total)} in total. A normal month would leave about {money(sum.typicalNormal)}.</p>}
           {invest && <p className="lead muted">{money(s.invest.monthly)} a month into {RISK[s.invest.risk].label.toLowerCase()} for {s.invest.years} years. The choice, and any provider, is yours.</p>}
           <div className="done-grid">
-            {!invest && <Link href="/cost-checker#paste" className="done-card"><Icon name="doc" /><b>Got a real offer?</b><span className="small muted">Decode it and see the small print</span></Link>}
+            {!invest && <Link href="/small-print" className="done-card"><Icon name="doc" /><b>Got a real offer?</b><span className="small muted">Decode it and see the small print</span></Link>}
             {!invest && chosen?.checker && <button type="button" className="done-card" onClick={() => toChecker(chosen)}><Icon name="calc" /><b>Full breakdown</b><span className="small muted">Money Label, risks and digital twin</span></button>}
             {!invest && chosen?.checker && <button type="button" className="done-card" onClick={() => toCompare(chosen)}><Icon name="compare" /><b>Add to Compare</b><span className="small muted">Line it up with other options</span></button>}
             {!invest && chosen?.checker && <button type="button" className="done-card" onClick={() => toCommitments(chosen)}><Icon name="chart" /><b>Add to my commitments</b><span className="small muted">See it next to what you already pay</span></button>}
             <Link href="/" className="done-card"><Icon name="spark" /><b>Plan something else</b><span className="small muted">Back to the start</span></Link>
           </div>
           {msg && <p className="small" role="status">{msg}</p>}
-          <button type="button" className="link small" onClick={() => { journeyStore.set(DEFAULT_SITUATION); setPicked(null); setLevers([]); go(0); }}>Clear my answers</button>
+          <button type="button" className="link small quiet" onClick={() => { if (!window.confirm("Clear your answers and start again?")) return; journeyStore.set(DEFAULT_SITUATION); setPicked(null); setLevers([]); go(0); }}>Clear my answers</button>
         </section>
       )}
     </div>

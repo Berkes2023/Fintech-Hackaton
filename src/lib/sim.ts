@@ -10,13 +10,14 @@ import { monthlyRate } from "./finance";
 
 /* ---------- where every number comes from ---------- */
 
-export type Source = "you_told_us" | "document_says" | "we_calculated" | "ai_explained" | "illustrative";
+export type Source = "you_told_us" | "document_says" | "we_calculated" | "ai_explained" | "illustrative" | "official_source";
 export const SOURCE_LABEL: Record<Source, string> = {
   you_told_us: "You told us",
   document_says: "Document says",
   we_calculated: "We calculated",
   ai_explained: "AI explained",
-  illustrative: "Example only",
+  illustrative: "Illustrative scenario",
+  official_source: "Official source",
 };
 /** Where an input came from. Open Banking and credit agencies are future sources; the prototype uses manual and mock data. */
 export type Origin = "manual" | "mock" | "open_banking" | "credit_agency";
@@ -255,7 +256,7 @@ export function habit(amount: number, timesPerWeek: number) {
 
 /* ---------- what if ---------- */
 
-export type Lever = "waitBonus" | "deposit" | "apr12" | "term60" | "rentUp" | "loanEnds" | "salaryUp" | "aprUp" | "aprDown" | "term36" | "incomeDip" | "cutSpending" | "carCheaper";
+export type Lever = "waitBonus" | "deposit" | "apr12" | "term60" | "rentUp" | "loanEnds" | "salaryUp" | "aprUp" | "aprDown" | "term36" | "incomeDip" | "cutSpending" | "carCheaper" | "waitLoan" | "term48";
 export const LEVERS: Record<Lever, string> = {
   waitBonus: "Wait for my bonus and add it to the deposit",
   deposit: "Put another £2,000 down",
@@ -269,10 +270,12 @@ export const LEVERS: Record<Lever, string> = {
   term36: "Choose 36 months",
   incomeDip: "My income falls 20% for 3 months",
   cutSpending: "I cut a recurring expense by £50",
-  carCheaper: "The car costs £3,000 less",
+  carCheaper: "The car costs less",
+  waitLoan: "Wait until my existing loan ends",
+  term48: "Choose 48 months",
 };
 /** Amounts for the adjustable what-ifs. A negative salary change is a pay cut. */
-export interface LeverAmounts { rent: number; salary: number; /** How much of the first one-off income to put towards the deposit (default: all of it). */ bonus?: number }
+export interface LeverAmounts { rent: number; salary: number; /** How much of the first one-off income to put towards the deposit (default: all of it). */ bonus?: number; /** How much cheaper the car is (default £3,000). */ priceCut?: number }
 
 export interface Case { picture: Picture; events: FutureEvent[]; scenario: Scenario }
 
@@ -292,7 +295,13 @@ export function applyLevers(c: Case, levers: Lever[], amounts: LeverAmounts = { 
       }
     }
     if (l === "deposit") sc = { ...sc, amount: Math.max(0, sc.amount - 2000) };
-    if (l === "carCheaper") sc = { ...sc, amount: Math.max(0, sc.amount - 3000) };
+    if (l === "carCheaper") sc = { ...sc, amount: Math.max(0, sc.amount - (amounts.priceCut ?? 3000)) };
+    if (l === "term48") sc = { ...sc, term: 48 };
+    if (l === "waitLoan") {
+      // Start the car payments in the month the first known debt stops, so the two never overlap.
+      const end = picture.debts.filter((d) => d.endsIn && d.amount > 0).sort((a, b) => (a.endsIn ?? 0) - (b.endsIn ?? 0))[0];
+      if (end?.endsIn) sc = { ...sc, startIn: Math.max(sc.startIn, end.endsIn - 1) };
+    }
     if (l === "apr12") sc = { ...sc, apr: 12 };
     if (l === "aprUp") sc = { ...sc, apr: sc.apr + 2 };
     if (l === "aprDown") sc = { ...sc, apr: Math.max(0, sc.apr - 2) };

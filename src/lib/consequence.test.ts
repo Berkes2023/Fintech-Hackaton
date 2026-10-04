@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  aprScenarios, changePoints, compareRows, depositConsequence, keyMoments, paymentConsequence, savingsConsequence, scenarioRow, snapshot,
+  aprScenarios, changePoints, compareRows, depositConsequence, keyMoments, paymentConsequence, savingsConsequence, scenarioRow, snapshot, stressScenarios, waitScenarios,
   termConsequence, VERDICT_WORDS, type Snapshot,
 } from "./consequence";
 import { applyLevers, blankPicture, simulateMonths, withAmount, type FutureEvent, type Picture, type Scenario } from "./sim";
@@ -170,5 +170,31 @@ describe("what changes over time", () => {
   it("key moments come in order, ending with the finance", () => {
     const m = keyMoments(p, [bonus], sc(20000), 5000, months);
     expect(m.map((x) => x.label)).toEqual(["Deposit paid", "First car payment", "Bonus (one-off)", "Loan repayments end", "Car finance ends after 48 months"]);
+  });
+});
+
+describe("stress testing and waiting", () => {
+  const s = snapshot(alex());
+  it("a bills rise, an income fall, an unexpected expense and a loan ending, before vs after", () => {
+    const rows = stressScenarios(s, 420, [
+      { id: "bills", label: "Bills rise", monthly: -100, oneOff: 0 },
+      { id: "income", label: "Income falls", monthly: -300, oneOff: 0, months: 3 },
+      { id: "unexpected", label: "Unexpected expense", monthly: 0, oneOff: -500 },
+      { id: "loan", label: "Loan ends", monthly: 180, oneOff: 0 },
+    ]);
+    expect(rows.map((r) => [r.remainingBefore, r.remainingAfter, r.bufferAfter])).toEqual([[250, 150, 5000], [250, -50, 4850], [250, 250, 4500], [250, 430, 5000]]);
+    expect(rows[1].sentence).toMatch(/from £250 to −£50 for 3 months, and covering the shortfall for 3 months would use about £150 of savings/);
+    allSentences(rows.map((r) => r.sentence));
+  });
+
+  it("buy now vs wait projects only the saving entered, and doesn't assume it goes to the deposit", () => {
+    const base = { monthlySaving: 300, price: 25000, deposit: 5000, apr: 9.9, term: 48, depositFromSavings: true };
+    const keep = waitScenarios(s, { ...base, shareToDeposit: 0 });
+    expect(keep.map((r) => r.savings)).toEqual([5000, 5300, 5900, 6800]);
+    expect(keep.every((r) => r.deposit === 5000 && r.financed === 20000)).toBe(true);
+    expect(keep.map((r) => r.cashAfterDeposit)).toEqual([0, 300, 900, 1800]);
+    const half = waitScenarios(s, { ...base, shareToDeposit: 0.5 });
+    expect(half.map((r) => r.deposit)).toEqual([5000, 5150, 5450, 5900]);
+    expect(half[3].monthly).toBeLessThan(half[0].monthly);
   });
 });

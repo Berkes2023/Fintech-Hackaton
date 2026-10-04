@@ -211,3 +211,16 @@ describe("partial bonus and a cheaper car", () => {
     expect(applyLevers({ picture: p0, events: [], scenario: car }, ["carCheaper"]).scenario.amount).toBe(17000);
   });
 });
+
+describe("waiting for a loan to end, and 48 months", () => {
+  it("starts car payments in the month the existing loan stops", () => {
+    const w = applyLevers({ picture, events: [], scenario: car }, ["waitLoan"]);
+    expect(w.scenario.startIn).toBe(4); // loan ends in month 5, so the first car payment is month 5
+    const rows = simulateMonths(w.picture, w.events, w.scenario, 6);
+    expect(rows.every((r) => !(r.existingDebt > 0 && r.newPayment > 0))).toBe(true);
+  });
+  it("term48 and a custom price cut", () => {
+    expect(applyLevers({ picture, events: [], scenario: { ...car, term: 60 } }, ["term48"]).scenario.term).toBe(48);
+    expect(applyLevers({ picture, events: [], scenario: car }, ["carCheaper"], { rent: 100, salary: 150, priceCut: 2000 }).scenario.amount).toBe(18000);
+  });
+});

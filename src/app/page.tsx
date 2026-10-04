@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
+import { SourceBadge } from "@/components/CarParts";
 import { Gauge } from "@/components/CreditContext";
 import { Dashboard } from "@/components/Dashboard";
 import { Icon } from "@/components/Icon";
@@ -48,7 +49,7 @@ function numbers() {
 const keyed = (xs: ReactNode[]) => xs.map((x, i) => <Fragment key={i}>{x}</Fragment>);
 
 function Source({ s }: { s: Stat }) {
-  return <p className="stat-source">Source: <a href={s.url} target="_blank" rel="noreferrer">{s.source}</a> · {s.geography}, {s.year.split(" ")[0]}</p>;
+  return <p className="stat-source"><SourceBadge source="official_source" /> <a href={s.url} target="_blank" rel="noreferrer">{s.source}</a> · {s.geography}, {s.year.split(" ")[0]}</p>;
 }
 
 function BigStat({ s, children }: { s: Stat; children?: ReactNode }) {
@@ -81,7 +82,7 @@ export default function Home() {
           <span className="caption" style={{ color: "#a6a6aa" }}>Before You Sign</span>
           <HeroTyper />
           <div className="row" style={{ gap: 12 }}>
-            <Link href="/check" className="btn btn-on-dark">Start my journey <Icon name="arrow" size={18} /></Link>
+            <Link href="/plan" className="btn btn-on-dark">Start my journey <Icon name="arrow" size={18} /></Link>
             <a href="#story" className="btn btn-ghost-photo">See the story ↓</a>
           </div>
         </div>
@@ -353,7 +354,7 @@ export default function Home() {
           <Sequence className="journey-path" interval={350} items={([
             "Your situation", "Credit", "Goal", "Future changes", "Actual offer", "Consequences",
           ]).map((t, i) => <Fragment key={t}><span className="path-n">{String(i + 1).padStart(2, "0")}</span><b>{t}</b></Fragment>)} />
-          <Link href="/check" className="btn btn-on-dark">Start with my situation <Icon name="arrow" size={18} /></Link>
+          <Link href="/plan" className="btn btn-on-dark">Start with my situation <Icon name="arrow" size={18} /></Link>
           <p className="tagline on-dark">Know before you commit.</p>
         </div>
       </section>
@@ -371,7 +372,7 @@ export default function Home() {
 
       <section className="dark-band section">
         <div className="container stack" style={{ gap: 32 }}>
-          <h2 className="h1 section-title">Our promises</h2>
+          <div className="row" style={{ justifyContent: "space-between" }}><h2 className="h1 section-title">Our promises</h2><Link href="/about" className="btn btn-on-dark btn-sm">About Before You Sign</Link></div>
           <div className="grid-3">
             <div className="card stack"><span className="caption">Code calculates</span><p className="h3">AI explains</p><p className="muted">Every number comes from transparent, tested maths. AI only reads documents and explains, and every AI answer is labelled.</p></div>
             <div className="card stack"><span className="caption">You decide</span><p className="h3">We never recommend</p><p className="muted">No “buy this”, no “best deal”, no approval predictions and no invented lender rates.</p></div>

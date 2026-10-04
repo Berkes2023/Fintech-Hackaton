@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { creditEstablished, creditLine, type Cra } from "@/lib/credit";
-import { aprScenarios, changePoints, compareRows, keyMoments, paymentConsequence, savingsConsequence, scenarioRow, snapshot } from "@/lib/consequence";
+import { waitScenarios, changePoints, compareRows, keyMoments, paymentConsequence, savingsConsequence, scenarioRow, snapshot } from "@/lib/consequence";
 import { DECISIONS, STAGES, type DecisionKind, type Stage } from "@/lib/decision";
+import { LENDER_QUESTIONS, offerFromExtraction } from "@/lib/offer";
+import { aprComparison, insightsFor, nextDebtEnding, repeatedPurchase, spendingChange, type Moment, type SuggestionAction } from "@/lib/insight";
 import { risks, simulate, understandingCheck } from "@/lib/finance";
 import { money, pct } from "@/lib/format";
 import type { Mark } from "@/lib/highlight";
@@ -15,17 +17,19 @@ import {
   hiddenCost, illustrativeProviders, impact, LEVERS, position, recurringIncome, schedule, simulateMonths, statements, toFinance, toMonthly,
   type CarState, type Item, type Lever, type LeverAmounts, type Picture, type Scenario,
 } from "@/lib/sim";
-import { carStore, commitmentsStore, journeyStore, newOptionId, savedStore, thisMonth, MAX_SAVED } from "@/lib/store";
+import { carStore, commitmentsStore, decisionStore, journeyStore, newOptionId, savedStore, thisMonth, MAX_SAVED } from "@/lib/store";
 import { EventEditor, SourceBadge, WhyBreakdown } from "./CarParts";
 import { Chart } from "./Chart";
 import { CommitCheck } from "./CommitCheck";
 import { CostScanner } from "./CostScanner";
 import { BeforeAfter, Consequence } from "./Consequence";
+import { InsightPanel, LiveMini, LivePicture } from "./Insights";
 import { CreditResult, CreditStart } from "./CreditContext";
 import { DocumentPanel } from "./DocumentPanel";
 import { Icon } from "./Icon";
 import { startGoal } from "./Journey";
 import { PasteFill, type FillResult } from "./PasteFill";
+import { Questions } from "./Questions";
 
 // One natural question per screen, in the order a person thinks a decision through.
 const STEPS: { stage: Stage; title: string }[] = [
@@ -108,11 +112,17 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
   const [levers, setLevers] = useState<Lever[]>([]);
   const [amounts, setAmounts] = useState<LeverAmounts>({ rent: 100, salary: 150 });
   const [horizon, setHorizon] = useState(12);
+  // A repeated purchase the person is curious about, and whether they opened the spending what-if.
+  const [repeated, setRepeated] = useState({ amount: 0, timesPerWeek: 0 });
+  const [showCut, setShowCut] = useState(false);
+  // Buy now vs wait: how much of the extra savings to explore putting towards the deposit (none by default).
+  const [waitShare, setWaitShare] = useState(0);
   const [full, setFull] = useState(false);
   const [doc, setDoc] = useState<Omit<FillResult, "type" | "values"> | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const saved = savedStore.use();
+  const decisions = decisionStore.use();
   const commitments = commitmentsStore.use();
 
   const start = thisMonth();
@@ -151,6 +161,22 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
   const termsSource = sc.source === "document" ? "document_says" : sc.fieldSources.apr === "illustrative" ? "illustrative" : "you_told_us";
   const moments = keyMoments(p, st.events, sc, st.purchase.deposit, monthName);
   const exploreTo = (l: Lever) => { setLevers([l]); go(S.whatif); };
+  const insightCtx = {
+    picture: p, events: st.events, monthName, preferredBuffer: st.preferredBuffer, repeated,
+    car: st.purchase.price > 0 ? { price: st.purchase.price, deposit: st.purchase.deposit, scenario: carScenario({ ...st, use: "mine" }), depositFromSavings: fromSavings } : undefined,
+  };
+  // Suggestions run a what-if when the person chooses one. They never decide anything.
+  const onAction = (a: SuggestionAction) => {
+    if (a === "waitBonus" || a === "waitLoan" || a === "term48") exploreTo(a);
+    if (a === "cheaperCar") { setAmounts({ ...amounts, priceCut: 2000 }); exploreTo("carCheaper"); }
+    if (a === "smallerDeposit") { const d = Math.max(0, Math.round(Math.min(snap.buffer, st.purchase.deposit) / 2 / 500) * 500); set({ purchase: { ...st.purchase, deposit: d, saved: d } }); }
+    if (a === "spendingCut") setShowCut(true);
+    if (a === "aprDown") exploreTo("aprDown");
+    // Keep £1,000 of the savings: a smaller deposit, more finance, more cash kept. Both sides are then shown.
+    if (a === "keepCash") { const d = Math.max(0, Math.min(st.purchase.deposit, snap.buffer - 1000)); set({ purchase: { ...st.purchase, deposit: d, saved: d } }); }
+  };
+  const insights = (m: Moment) => <InsightPanel items={insightsFor(m, insightCtx)} onAction={onAction} />;
+  const MOMENT: Partial<Record<number, Moment>> = { [S.income]: "income", [S.spending]: "spending", [S.borrowing]: "borrowing", [S.buffer]: "buffer", [S.longterm]: "longterm" };
   const why = (text: string) => <details className="why"><summary>Why am I seeing this?</summary><p className="small" style={{ margin: "8px 0 0" }}>{text}</p></details>;
 
   const nav = (label = "Next", disabled = false) => (
@@ -175,15 +201,6 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
     return <ol className="story" aria-label="What you’ve told us so far">{lines.map((l) => <li key={l}>{l}</li>)}</ol>;
   };
 
-  const situationCard = () => (
-    <aside className="card stack position-card" aria-label="Your situation so far">
-      <span className="caption">Your normal month, so far</span>
-      <b className="h1">{money(pos.value)}</b>
-      <p className="small muted">left after regular costs, before the car. One-off money isn’t included.</p>
-      <WhyBreakdown title="Regular income minus regular costs, from what you’ve told us." result={pos} />
-    </aside>
-  );
-
   const fields = (k: ListKey, list: [string, string, string?][]) => (
     <div className="journey-fields">
       {list.map(([id, label, help]) => <Money key={id} id={`f-${id}`} label={label} help={help} value={amountOf(p[k], id)} onChange={(v) => setAmt(k, id, v)} />)}
@@ -191,24 +208,12 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
   );
 
   const onFill = (r: FillResult) => {
-    const v = r.values;
-    const has = (k: string) => r.filled.includes(k);
-    const mine = carScenario({ ...st, use: "mine" });
-    const amount = has("amount") ? Number(v.amount) : has("balance") ? Number(v.balance) : mine.amount;
-    const assumed = [!(has("amount") || has("balance")) && "amount", !has("apr") && "APR", !(has("term") || has("n")) && "term"].filter(Boolean) as string[];
-    const scenario: Scenario = {
-      id: "offer", label: "Your agreement", source: "document", amount,
-      apr: has("apr") ? Number(v.apr) : mine.apr, term: has("term") ? Number(v.term) : has("n") ? Number(v.n) : mine.term,
-      upfrontFee: has("fee") ? Number(v.fee) : 0, monthlyFee: 0, balloon: 0, startIn: 0, lateFee: has("lateFee") ? Number(v.lateFee) : undefined,
-      fieldSources: {
-        amount: assumed.includes("amount") ? "you_told_us" : "document_says", apr: assumed.includes("APR") ? "you_told_us" : "document_says",
-        term: assumed.includes("term") ? "you_told_us" : "document_says", upfrontFee: has("fee") ? "document_says" : "you_told_us", lateFee: has("lateFee") ? "document_says" : undefined,
-      },
-    };
+    // The shared mapping (lib/offer.ts): document terms where stated, your scenario’s values where not.
+    const offer = offerFromExtraction(r, carScenario({ ...st, use: "mine" }));
     const { type: _t, values: _v, ...rest } = r;
     void _t; void _v;
     setDoc(rest);
-    set({ offer: { scenario, assumed, terms: r.conditions.map((c) => ({ title: c.title, quote: c.quote })) }, use: "offer" });
+    set({ offer, use: "offer" });
   };
 
   const marks: Mark[] = doc ? [
@@ -260,6 +265,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
             </div>
             <p className="small muted">Your own number, not a rule. If you set one, we’ll show how each scenario compares with it.</p>
           </section>
+          {insights("snapshot")}
           <p className="lead">We’ll use this context to show what changes when you explore a financial decision.</p>
           {nav("Now, my credit context")}
         </section>
@@ -278,7 +284,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
         <section className="stack journey-card" aria-labelledby="q-result">
           <span className="caption">Before You Sign · Your credit context</span>
           <h2 id="q-result" className="display">{st.credit.calculated ? "Your estimated credit scores" : "Your credit context"}</h2>
-          <CreditResult credit={st.credit} onEnter={(c) => { setCraIntent(c); go(S.credit); }} />
+          <CreditResult credit={st.credit} onEnter={(c) => { setCraIntent(c); go(S.credit); }} onChange={(credit) => set({ credit })} />
           <div className="credit-story stack">
             <p className="display" style={{ fontSize: "clamp(30px, 4.4vw, 46px)" }}>Your credit is where we start, not where we stop.</p>
             <p className="lead muted">Credit can tell us part of the story. Now let’s understand the decision you’re actually considering.</p>
@@ -297,7 +303,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
           {wanted && wanted !== "car" && wanted !== "invest" && (
             <div className="notice row" style={{ justifyContent: "space-between" }}>
               <span>You picked <b>{GOALS[wanted].label}</b> on the home page.</span>
-              <button type="button" className="btn btn-dark btn-sm" onClick={() => { journeyStore.set(startGoal(journeyStore.get(), wanted)); router.push("/plan?step=1"); }}>Continue with it <Icon name="arrow" size={16} /></button>
+              <button type="button" className="btn btn-dark btn-sm" onClick={() => { journeyStore.set(startGoal(journeyStore.get(), wanted)); router.push("/plan/simple?step=1"); }}>Continue with it <Icon name="arrow" size={16} /></button>
             </div>
           )}
           <div className="goal-grid">
@@ -306,7 +312,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
               const pick = () => {
                 if (kind === "car") { set({ goal: "car" }); go(S.price); return; }
                 const plan = TO_PLAN[kind];
-                if (plan) { journeyStore.set(startGoal(journeyStore.get(), plan)); router.push("/plan?step=1"); return; }
+                if (plan) { journeyStore.set(startGoal(journeyStore.get(), plan)); router.push("/plan/simple?step=1"); return; }
                 router.push(kind === "borrowing" ? "/commitments" : "/start");
               };
               return (
@@ -333,6 +339,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
             <button type="button" className="link small" onClick={() => { carStore.set({ ...exampleCar(), credit: st.credit }); setDoc(null); }}>Use example figures (a £25,000 car)</button>
             <span className="small muted">Fills every step with a fictional example you can change.</span>
           </div>
+          {st.purchase.price > 0 && insights("price")}
           {nav("Next", st.purchase.price <= 0)}
         </section>
       )}
@@ -351,11 +358,13 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
             <b>= {money(financed)}</b>
           </div>
           <label className="quiz-option"><input type="checkbox" checked={fromSavings} onChange={(e) => set({ depositFromSavings: e.target.checked })} /> The deposit comes from the savings I told you about</label>
-          {fromSavings && st.purchase.deposit > 0 && (
-            <Consequence label="What the deposit does to your savings" result={`${money(sav.before)} → ${money(sav.after)}`} sub="cash savings before and after the deposit"
-              means={[sav.sentence, "A larger deposit means borrowing less, but it also uses more of your cash now. Both matter."]}
-              changes={[{ label: "Savings", before: money(sav.before), after: money(sav.after) }, { label: "Amount to finance", before: money(st.purchase.price), after: money(financed) }]}
-              explore={[3000, Math.round(snap.buffer / 2 / 100) * 100, snap.buffer].filter((d, i, a) => d > 0 && d <= st.purchase.price && a.indexOf(d) === i && d !== st.purchase.deposit).map((d) => ({ label: `What if I use a ${money(d)} deposit?`, onClick: () => set({ purchase: { ...st.purchase, deposit: d, saved: d } }) }))} />
+          {insights("deposit")}
+          {fromSavings && snap.buffer > 0 && (
+            <div className="chips" role="group" aria-label="Try another deposit">
+              {[3000, Math.round(snap.buffer / 2 / 100) * 100, snap.buffer].filter((d, i, arr) => d > 0 && d <= st.purchase.price && arr.indexOf(d) === i && d !== st.purchase.deposit).map((d) => (
+                <button key={d} type="button" className="chip" onClick={() => set({ purchase: { ...st.purchase, deposit: d, saved: d } })}>What if I use a {money(d)} deposit?</button>
+              ))}
+            </div>
           )}
           {nav("How might I finance it?")}
         </section>
@@ -367,11 +376,12 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
         const mine = carScenario({ ...st, use: "mine" });
         const mineSch = schedule(mine);
         const mineC = paymentConsequence(snap, mineSch.regular, st.preferredBuffer);
-        const rates = aprScenarios(snap, mine.amount, mine.term, [8, 12, 18], st.preferredBuffer);
+        const rates = aprComparison(snap, mine.amount, mine.term, mine.apr, st.preferredBuffer);
         return (
           <section className="stack" style={{ gap: 20 }} aria-labelledby="q-fin">
             <h2 id="q-fin" className="h1">{copy.financeQuestion}</h2>
             <p className="muted">Different finance providers can offer different APRs, fees, terms and conditions. Your credit profile may influence what you’re offered, but only a lender can tell you its rate. These three are <b>fictional</b>, to show how the differences play out. None of them is “best”.</p>
+            {insights("finance")}
             <div className="option-grid">
               {providers.map((x) => {
                 const xs = schedule(x);
@@ -455,6 +465,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
       {step >= S.income && step <= S.longterm && (
         <div className="picture-layout">
           <section className="stack journey-card">
+            <LiveMini picture={p} />
             {step === S.income && (<>
               <span className="caption">Before You Sign · Step 1</span>
               <h2 className="display">First, let’s understand your situation.</h2>
@@ -469,6 +480,36 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
               <p className="muted">The regular things. No judgement: it just makes the simulation realistic.</p>
               {fields("essentials", [["rent", "Rent or mortgage"], ["bills", "Bills (energy, water, council tax, phone)"], ["food", "Food"], ["transport", "Transport"], ["insurance", "Insurance"]])}
               {fields("discretionary", [["subs", "Subscriptions"], ["fun", "Shopping, eating out and entertainment"], ["otherSpend", "Other recurring spending"]])}
+              <details className="list repeat-calc">
+                <summary>Something small you buy often? See what it adds up to</summary>
+                <div className="journey-fields" style={{ marginTop: 12 }}>
+                  <Money id="rp-amt" label="Each time" step={1} value={repeated.amount} onChange={(amount) => setRepeated({ ...repeated, amount })} />
+                  <div className="field"><label htmlFor="rp-times">Times a week</label><div className="input"><input id="rp-times" type="number" min={0} max={21} value={repeated.timesPerWeek || ""} placeholder="0" onChange={(e) => setRepeated({ ...repeated, timesPerWeek: Math.max(0, Math.min(21, Number(e.target.value) || 0)) })} /></div></div>
+                </div>
+                {repeated.amount > 0 && repeated.timesPerWeek > 0 && (() => {
+                  const r = repeatedPurchase(repeated.amount, repeated.timesPerWeek);
+                  return (
+                    <div className="row" style={{ gap: 10, marginTop: 10 }}>
+                      <span className="small">About {money(r.week)} a week · {money(Math.round(r.month))} a month · <b>{money(Math.round(r.year))} a year</b></span>
+                      <button type="button" className="btn btn-light btn-sm" onClick={() => setAmt("discretionary", "otherSpend", amountOf(p.discretionary, "otherSpend") + Math.round(r.month))}>Add {money(Math.round(r.month))}/month to my other spending</button>
+                    </div>
+                  );
+                })()}
+              </details>
+              {showCut && (() => {
+                const top = [...p.discretionary].filter((i) => i.amount > 0).sort((a, b) => b.amount - a.amount)[0];
+                if (!top) return null;
+                return (
+                  <div className="cut-table" aria-live="polite">
+                    <span className="caption">What if {top.label.toLowerCase()} changed?</span>
+                    {spendingChange(top.amount, snap.remaining).map((c) => (
+                      <p key={c.cut} className="small"><b>−{money(c.cut)} a month</b> = {money(c.perYear)} a year · estimated monthly remaining {money(snap.remaining)} → <b>{money(c.remainingAfter)}</b></p>
+                    ))}
+                    <p className="small muted">Reducing recurring spending by an amount would increase your estimated monthly remaining by the same amount, assuming everything else stayed the same. Your call.</p>
+                  </div>
+                );
+              })()}
+
             </>)}
             {step === S.borrowing && (<>
               <h2 className="h1">What are you already paying back?</h2>
@@ -500,9 +541,10 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
               <p className="small muted">Workplace pensions usually are. If so, we don’t count it twice.</p>
               {fields("otherSaving", [["regular", "Regular savings or investments a month"], ["otherCommit", "Other regular commitments", "e.g. childcare or support payments."]])}
             </>)}
+            {MOMENT[step] && insights(MOMENT[step]!)}
             {nav(step === S.longterm ? "See my situation today" : "Next")}
           </section>
-          {situationCard()}
+          <LivePicture picture={p} />
         </div>
       )}
 
@@ -688,7 +730,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
         const altSaid = statements(altRows.slice(0, 24), bufferStart, monthName);
         const extraDeposit = sc.amount - alt.scenario.amount;
         const toggle = (l: Lever) => setLevers((x) => (x.includes(l) ? x.filter((y) => y !== l) : [...x, l]));
-        const shown = (Object.keys(LEVERS) as Lever[]).filter((l) => !(l === "waitBonus" && !oneOffIns.length) && !(l === "loanEnds" && borrowing <= 0));
+        const shown = (Object.keys(LEVERS) as Lever[]).filter((l) => !(l === "waitBonus" && !oneOffIns.length) && !(l === "loanEnds" && borrowing <= 0) && !(l === "waitLoan" && !nextDebtEnding(p)));
         const changed: string[] = [];
         if (levers.length) {
           if (alt.scenario.amount !== sc.amount) changed.push(`Finance goes from ${money(sc.amount)} to ${money(alt.scenario.amount)}.`);
@@ -698,6 +740,10 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
           const altPay = paymentConsequence(altSnap, as.regular, st.preferredBuffer);
           if (Math.abs(altPay.after - pay.after) > 0.5) changed.push(`Your estimated monthly remaining (once payments start) would be ${money(altPay.after)} instead of ${money(pay.after)}.`);
           if (altPay.bufferGap !== null) changed.push(altPay.sentences[altPay.sentences.length - 1]);
+          const overlap = (rs: typeof baseRows) => rs.filter((r) => r.existingDebt > 0 && r.newPayment > 0).length;
+          if (overlap(altRows) !== overlap(baseRows)) changed.push(`Months where the car payment and your existing borrowing overlap: ${overlap(baseRows)} → ${overlap(altRows)}.`);
+          const lowest = (rs: typeof baseRows) => Math.min(...rs.slice(0, 12).map((r) => r.normalLeft));
+          if (Math.abs(lowest(altRows) - lowest(baseRows)) > 0.5) changed.push(`The tightest regular month in the first year would leave ${money(lowest(altRows))} instead of ${money(lowest(baseRows))}.`);
           if (alt.scenario.startIn) changed.push(`The first payment moves to ${monthName(alt.scenario.startIn + 1)}.`);
           const bb = baseRows[11].buffer, ab = altRows[11].buffer;
           if (Math.abs(ab - bb) > 0.5) changed.push(`Your cash buffer after 12 months would be ${money(ab)} instead of ${money(bb)}.`);
@@ -719,11 +765,43 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
                 </div>
               </div>
             )}
+            {(() => {
+              const monthlySaving = amountOf(p.otherSaving, "regular");
+              const wr = waitScenarios(snap, { monthlySaving, price: st.purchase.price, deposit: st.purchase.deposit, apr: sc.apr, term: sc.term, shareToDeposit: waitShare, depositFromSavings: fromSavings });
+              return (
+                <section className="card stack" aria-labelledby="wait-q">
+                  <h3 id="wait-q" className="h3">Buy now, or wait?</h3>
+                  {monthlySaving > 0 ? (<>
+                    <p className="small">Based on what you’ve told us, you put {money(monthlySaving)} a month into regular saving. Assuming that continues (and ignoring any interest), here’s what waiting could change.</p>
+                    <div className="row" style={{ gap: 8 }}>
+                      <span className="small"><b>Explore using some of the extra savings towards the deposit?</b></span>
+                      <div className="segmented" role="group" aria-label="Share of extra savings towards the deposit">
+                        {[0, 0.5, 1].map((x) => <button key={x} type="button" aria-pressed={waitShare === x} onClick={() => setWaitShare(x)}>{x === 0 ? "None" : x === 1 ? "All" : "Half"}</button>)}
+                      </div>
+                    </div>
+                    <div className="table-wrap">
+                      <table className="cmp">
+                        <thead><tr><th scope="col"></th>{wr.map((w) => <th key={w.months} scope="col">{w.months === 0 ? "Buy now" : `Wait ${w.months} month${w.months > 1 ? "s" : ""}`}</th>)}</tr></thead>
+                        <tbody>
+                          <tr><th scope="row">Savings before the deposit</th>{wr.map((w) => <td key={w.months}>{money(w.savings)}</td>)}</tr>
+                          <tr><th scope="row">Deposit</th>{wr.map((w) => <td key={w.months}>{money(w.deposit)}</td>)}</tr>
+                          <tr><th scope="row">Finance required</th>{wr.map((w) => <td key={w.months}>{money(w.financed)}</td>)}</tr>
+                          <tr><th scope="row">Each month</th>{wr.map((w) => <td key={w.months}>{money(w.monthly, true)}</td>)}</tr>
+                          <tr><th scope="row">Borrowing cost</th>{wr.map((w) => <td key={w.months}>{money(w.cost)}</td>)}</tr>
+                          <tr><th scope="row">Cash kept after the deposit</th>{wr.map((w) => <td key={w.months}>{money(w.cashAfterDeposit)}</td>)}</tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="small muted">A projection of what you entered, not a prediction. <SourceBadge source="we_calculated" /></p>
+                  </>) : <p className="small">You haven’t told us about any regular saving, so waiting wouldn’t change your savings in this projection. <button type="button" className="link small" onClick={() => go(S.longterm)}>Add regular saving</button></p>}
+                </section>
+              );
+            })()}
             <p className="muted">Or try any combination. Our code reruns the whole simulation; nothing here is a prediction or advice.</p>
             <div className="chips" role="group" aria-label="What ifs">
               {shown.filter((l) => l !== "waitBonus").map((l) => (
                 <button key={l} type="button" className="chip" aria-pressed={levers.includes(l)} onClick={() => toggle(l)}>
-                  {l === "rentUp" ? `Rent increases by ${money(amounts.rent)}` : l === "salaryUp" ? `My salary changes by ${amounts.salary >= 0 ? "+" : "−"}${money(Math.abs(amounts.salary))}` : LEVERS[l]}
+                  {l === "carCheaper" ? `The car costs ${money(amounts.priceCut ?? 3000)} less` : l === "rentUp" ? `Rent increases by ${money(amounts.rent)}` : l === "salaryUp" ? `My salary changes by ${amounts.salary >= 0 ? "+" : "−"}${money(Math.abs(amounts.salary))}` : LEVERS[l]}
                 </button>
               ))}
             </div>
@@ -789,6 +867,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
               </section>
             ) : <p className="list small">No agreement decoded yet. Try the fictional example to see how it works.</p>}
           </div>
+          <Questions questions={LENDER_QUESTIONS} />
           {doc && (doc.conditions.length > 0 || doc.source) && (
             <div className="grid-2 doc-row">
               <CostScanner conditions={doc.conditions} onShow={show} />
@@ -846,6 +925,34 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
               <button type="button" className="chip" onClick={() => exploreTo("carCheaper")}>Choose a lower purchase price</button>
             </div>
           </section>
+          {(() => {
+            const last = decisions[decisions.length - 1];
+            const now = { price: st.purchase.price, deposit: st.purchase.deposit, monthly: sch.regular, remainingBefore: pay.before, remainingAfter: pay.after, buffer: snap.buffer, apr: sc.apr, term: sc.term };
+            const rowsCmp: [string, string, string][] = last ? [
+              ["Monthly remaining today", money(last.remainingBefore), money(now.remainingBefore)],
+              ["Car payment", money(last.monthly, true), money(now.monthly, true)],
+              ["Monthly remaining after", money(last.remainingAfter), money(now.remainingAfter)],
+              ["Savings", money(last.buffer), money(now.buffer)],
+            ] : [];
+            return (
+              <details className="how-calc">
+                <summary>Revisit this decision later</summary>
+                <div className="stack" style={{ gap: 10, marginTop: 10 }}>
+                  {last && (
+                    <div className="table-wrap"><table className="cmp">
+                      <thead><tr><th scope="col"></th><th scope="col">Last time ({new Date(last.savedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })})</th><th scope="col">Now</th></tr></thead>
+                      <tbody>{rowsCmp.map(([k, a, b]) => <tr key={k} className={a !== b ? "priority" : undefined}><th scope="row">{k}</th><td>{a}</td><td>{b}</td></tr>)}</tbody>
+                    </table></div>
+                  )}
+                  <div className="row" style={{ gap: 12 }}>
+                    <button type="button" className="btn btn-light btn-sm" onClick={() => { decisionStore.set([...decisions.slice(-2), { ...now, savedAt: new Date().toISOString() }]); setMsg("Remembered on this device. Come back after updating your situation to compare."); }}>Remember this decision on this device</button>
+                    {decisions.length > 0 && <button type="button" className="link small" onClick={() => decisionStore.set([])}>Forget saved decisions</button>}
+                  </div>
+                  <p className="small muted">Kept only in this browser, never on our servers. Clear it any time.</p>
+                </div>
+              </details>
+            );
+          })()}
           <CommitCheck type="loan" m={loanM} risks={risks("loan", loanValues, loanM)} check={understandingCheck("loan", loanValues, loanM)} perLabel="a month" onSave={() => {
             if (saved.length < MAX_SAVED) savedStore.set([...saved, { id: newOptionId(), name: `Car: ${sc.label}`, type: "loan", values: loanValues }]);
           }} />
@@ -855,7 +962,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
             <Link href="/cost-checker?type=loan#afford" className="done-card"><Icon name="calc" /><b>Stress test it</b><span className="small muted">Cost checker, stress test and reverse calculator</span></Link>
           </div>
           {msg && <p className="small" role="status">{msg}</p>}
-          <button type="button" className="link small" onClick={() => { carStore.set(EMPTY_CAR); setDoc(null); setLevers([]); go(0); }}>Clear my answers and start again</button>
+          <button type="button" className="link small quiet" onClick={() => { if (!window.confirm("Start again? This clears the answers you’ve entered on this device.")) return; carStore.set(EMPTY_CAR); setDoc(null); setLevers([]); go(0); }}>Clear my answers and start again</button>
           {nav()}
           <p className="display closing-big">The decision remains yours.</p>
           <p className="lead closing">We’ve shown how the numbers change under the information and assumptions you’ve provided.</p>

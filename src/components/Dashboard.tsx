@@ -8,7 +8,7 @@ import { Icon } from "./Icon";
 import { startGoal } from "./Journey";
 
 const TOOLS = [
-  { href: "/cost-checker#paste", title: "I’ve been offered something", desc: "Decode the small print", icon: "doc" },
+  { href: "/small-print", title: "I’ve been offered something", desc: "Read the small print", icon: "doc" },
   { href: "/compare", title: "Compare offers", desc: "Side by side, clause by clause", icon: "compare" },
   { href: "/commitments", title: "My commitments", desc: "Everything I already pay", icon: "chart" },
   { href: "/learn", title: "Learn the words", desc: "APR, EAR and more, in plain English", icon: "book" },
@@ -19,8 +19,8 @@ export function Dashboard() {
   const router = useRouter();
   const open = (g: Goal) => {
     // Saving or investing doesn't involve borrowing, so it goes straight to its wizard.
-    if (g === "invest") { journeyStore.set(startGoal(journeyStore.get(), g)); router.push("/plan?step=1"); return; }
-    router.push(`/check?goal=${g}`);
+    if (g === "invest") { journeyStore.set(startGoal(journeyStore.get(), g)); router.push("/plan/simple?step=1"); return; }
+    router.push(`/plan?goal=${g}`);
   };
   return (
     <div className="dash anchor-target" id="dashboard">

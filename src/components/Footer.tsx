@@ -29,6 +29,13 @@ export function Footer() {
           <p style={{ marginTop: 8 }}>
             Free, impartial help: MoneyHelper, moneyhelper.org.uk, 0800 138 7777 · StepChange, stepchange.org, 0800 138 1111.
           </p>
+          <nav className="footer-legal" aria-label="Legal">
+            <Link href="/privacy">Privacy policy</Link>
+            <Link href="/terms">Terms &amp; conditions</Link>
+            <Link href="/#sources">Sources &amp; methodology</Link>
+            <Link href="/about">About</Link>
+            <Link href="/about#privacy">Privacy &amp; your data</Link>
+          </nav>
         </div>
       </div>
     </footer>

@@ -204,3 +204,12 @@ describe("estimated scores on each agency's displayed scale", () => {
     expect(displayedScores({ ...c, calculated: false }).map((d) => d.cra)).toEqual(["experian"]);
   });
 });
+
+describe("what could change your credit profile", () => {
+  it("paying down £1,000 of a £3,750 balance on £5,000 limits: 75% → 55%", async () => {
+    const { utilisationAfterPaydown } = await import("./credit");
+    expect(utilisationAfterPaydown(5000, 3750, 1000)).toEqual({ before: 75, after: 55, newBalance: 2750 });
+    expect(utilisationAfterPaydown(5000, 500, 1000)?.after).toBe(0); // can't pay down more than the balance
+    expect(utilisationAfterPaydown(0, 500, 100)).toBeNull();
+  });
+});

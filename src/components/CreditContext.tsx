@@ -3,10 +3,11 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   bandFor, bandPosition, COMPONENT_MAX, conversions, CRA_LABEL, CRA_ORDER, creditEstimate, CURRENT_SCALE, displayedScores, LABELS, makeScore, missingAnswers,
-  profileTotal, removeScore, SCALES, upsertScore,
+  profileTotal, removeScore, SCALES, upsertScore, utilisationAfterPaydown,
   type BorrowingKind, type Cra, type CraScore, type CreditProfile, type DisplayedScore, type EstimateInputs, type Scale, type ScaleId,
 } from "@/lib/credit";
 import { money } from "@/lib/format";
+import { SourceBadge } from "./CarParts";
 import { Icon } from "./Icon";
 
 /* ---------- gauges ---------- */
@@ -304,7 +305,7 @@ function AgencyResult({ d, profile }: { d: DisplayedScore; profile: number | nul
 const fmt = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(2));
 
 /** The credit result: three agency-scale scores up front, then exactly how they were worked out. */
-export function CreditResult({ credit, onEnter }: { credit: CreditProfile; onEnter: (c: Cra) => void }) {
+export function CreditResult({ credit, onEnter, onChange }: { credit: CreditProfile; onEnter: (c: Cra) => void; onChange?: (c: CreditProfile) => void }) {
   const shown = displayedScores(credit);
   const profile = profileTotal(credit);
   const r = credit.calculated && credit.estimate ? creditEstimate(credit.estimate) : null;
@@ -362,6 +363,32 @@ export function CreditResult({ credit, onEnter }: { credit: CreditProfile; onEnt
           </div>
         </details>
       )}
+      {e && onChange && (credit.estimate?.cardLimits ?? 0) > 0 && (credit.estimate?.cardBalances ?? 0) > 0 && <ProfileExplorer credit={credit} onChange={onChange} />}
     </div>
+  );
+}
+
+/** "What could change your credit profile?" Educational: recalculates OUR estimate only, never an agency score. */
+function ProfileExplorer({ credit, onChange }: { credit: CreditProfile; onChange: (c: CreditProfile) => void }) {
+  const a = credit.estimate!;
+  const [pay, setPay] = useState(Math.min(1000, a.cardBalances ?? 0));
+  const u = utilisationAfterPaydown(a.cardLimits ?? 0, a.cardBalances ?? 0, pay);
+  const r = creditEstimate(a);
+  const after = u ? creditEstimate({ ...a, cardBalances: u.newBalance }) : null;
+  if (!u || !r.ok || !after?.ok) return null;
+  return (
+    <details className="how-calc">
+      <summary>What could change your credit profile?</summary>
+      <div className="stack" style={{ gap: 12, marginTop: 12 }}>
+        <p className="small">Factors in our educational profile include payment history, card utilisation, recent applications, how long you’ve had credit, existing borrowing and report indicators. Here’s one you can explore: card utilisation.</p>
+        <div className="field" style={{ maxWidth: 260 }}>
+          <label htmlFor="pe-pay">If I paid down this much of my card balances</label>
+          <div className="input"><span>£</span><input id="pe-pay" type="number" min={0} step={100} value={pay || ""} placeholder="0" onChange={(e) => setPay(Math.max(0, Number(e.target.value) || 0))} /></div>
+        </div>
+        <p className="lead" style={{ margin: 0 }}>Card utilisation <b>{u.before}%</b> → <b>{u.after}%</b> <SourceBadge source="we_calculated" /></p>
+        <p className="small">Our educational profile would move from {r.estimate.total}/100 to {after.estimate.total}/100. Lower credit utilisation is generally one factor that may be viewed differently in credit assessment. This does not predict how Experian, Equifax, TransUnion or a lender will change your score or decision.</p>
+        <button type="button" className="btn btn-light btn-sm" style={{ justifySelf: "start" }} onClick={() => onChange({ ...credit, estimate: { ...a, cardBalances: u.newBalance } })}>Update my Before You Sign profile</button>
+      </div>
+    </details>
   );
 }

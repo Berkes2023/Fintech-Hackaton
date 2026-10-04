@@ -249,7 +249,7 @@ export function Checker() {
                 </div>
                 <span className="small muted">{detailed ? "All costs, assumptions, terms and calculations." : "Key costs and things to know."} Same numbers either way.</span>
               </div>
-              <button type="button" className="link small" onClick={() => { clearDoc(); commit({ type, values: defaults(type), example: false }); }}>Reset</button>
+              <button type="button" className="link small quiet" onClick={() => { if (!window.confirm("Reset these figures to the defaults?")) return; clearDoc(); commit({ type, values: defaults(type), example: false }); }}>Reset</button>
             </div>
           </div>
 

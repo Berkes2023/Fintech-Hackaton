@@ -7,12 +7,16 @@ export interface NavGroup {
   feature: { href: string; eyebrow: string; title: string; body: string; cta: string };
 }
 
+// Fewer choices, clearer purpose. Products holds the main experiences; Tools only genuinely different utilities.
 export const NAV: NavGroup[] = [
   {
     key: "products",
     label: "Products",
-    intro: "Pick what you’re looking at. We’ll show the real cost.",
+    intro: "Start with a decision, an offer or your month.",
     links: [
+      { href: "/plan", title: "Plan a decision step by step", desc: "Your situation, credit, the decision and what it changes", icon: "spark" },
+      { href: "/small-print", title: "Read the small print", desc: "Paste or upload terms; see what they mean for you", icon: "doc" },
+      { href: "/stress-test", title: "Stress test your month", desc: "What if bills rise, income falls or something unexpected happens?", icon: "wallet" },
       { href: "/cost-checker?type=loan", title: "Loans", desc: "Personal loans, car and store finance", icon: "loan" },
       { href: "/cost-checker?type=card", title: "Credit cards", desc: "0% offers, minimum payments, APR", icon: "card" },
       { href: "/cost-checker?type=overdraft", title: "Overdrafts", desc: "What being below £0 really costs", icon: "overdraft" },
@@ -21,35 +25,29 @@ export const NAV: NavGroup[] = [
       { href: "/cost-checker?type=household", title: "Household bills", desc: "Phone, broadband, energy contracts", icon: "household" },
     ],
     feature: {
-      href: "/compare",
-      eyebrow: "Example",
-      title: "Paying for a £1,200 laptop?",
-      body: "See Pay in 3, a credit card and store finance side by side, with every cost made clear.",
-      cta: "Compare the options",
+      href: "/plan",
+      eyebrow: "Start here",
+      title: "Thinking about a car, a home or a big purchase?",
+      body: "Tell us about your situation and see what the decision could change, before you commit.",
+      cta: "Plan step by step",
     },
   },
   {
     key: "tools",
     label: "Tools",
-    intro: "Simple tools that turn small print into understanding.",
+    intro: "Specialised utilities, each for a different job.",
     links: [
-      { href: "/check", title: "Think a decision through", desc: "Your situation, your future, simulated", icon: "spark" },
-      { href: "/start", title: "Not sure where to start?", desc: "Three quick questions", icon: "help" },
-      { href: "/plan", title: "Plan step by step", desc: "Car, home, borrowing or investing", icon: "spark" },
-      { href: "/cost-checker", title: "Cost checker", desc: "Short-term and long-term cost in one view", icon: "calc" },
-      { href: "/compare", title: "Compare options", desc: "Up to four products, side by side", icon: "compare" },
-      { href: "/cost-checker#paste", title: "Read the small print", desc: "Paste the terms and AI fills in the form", icon: "doc" },
-      { href: "/cost-checker#afford", title: "Stress test your month", desc: "What’s left if bills rise or income falls", icon: "wallet" },
+      { href: "/compare", title: "Compare options", desc: "Up to four products, side by side, never ranked", icon: "compare" },
       { href: "/diff", title: "Contract diff", desc: "Two offers, clause by clause", icon: "doc" },
-      { href: "/commitments", title: "Commitment map", desc: "Everything you pay, on one timeline", icon: "chart" },
-      { href: "/reverse", title: "Reverse calculator", desc: "What £150 a month really means", icon: "calc" },
+      { href: "/commitments", title: "Commitment map", desc: "Everything you already pay, on one timeline", icon: "chart" },
+      { href: "/reverse", title: "Reverse calculator", desc: "What a monthly budget means over different terms", icon: "calc" },
     ],
     feature: {
-      href: "/cost-checker?type=card",
-      eyebrow: "Try this",
-      title: "The minimum payment trap",
-      body: "Switch a card to minimum payments and watch how long £1,200 takes to clear.",
-      cta: "Open the checker",
+      href: "/compare",
+      eyebrow: "Example",
+      title: "Paying for a £1,200 laptop?",
+      body: "See Pay in 3, a credit card and store finance side by side, with every cost made clear.",
+      cta: "Compare the options",
     },
   },
   {
@@ -74,20 +72,21 @@ export const NAV: NavGroup[] = [
   {
     key: "about",
     label: "About",
-    intro: "How Before You Sign works, and what it will never do.",
+    intro: "How Before You Sign works, and what it doesn’t do.",
     links: [
-      { href: "/responsible-ai", title: "Responsible AI", desc: "Where we use AI, and the rules it follows", icon: "shield" },
-      { href: "/responsible-ai#maths", title: "How we calculate", desc: "The maths behind every number", icon: "calc" },
-      { href: "/responsible-ai#limits", title: "What we don’t do", desc: "No advice, no bank access, no data kept", icon: "help" },
-      { href: "/developers", title: "Developer API", desc: "Money Labels and Product DNA for any website", icon: "code" },
-      { href: "/firewall", title: "Commitment Firewall", desc: "Future vision: an optional checkout companion", icon: "shield" },
+      { href: "/about#how", title: "How it works", desc: "One journey, from your situation to the small print", icon: "spark" },
+      { href: "/about#ai", title: "Calculations & responsible AI", desc: "Code calculates. AI explains.", icon: "calc" },
+      { href: "/about#dont", title: "What we don’t do", desc: "No lending, no advice, no rankings", icon: "help" },
+      { href: "/about#privacy", title: "Privacy & your data", desc: "What stays on your device, and what AI sees", icon: "shield" },
+      { href: "/#sources", title: "Sources & methodology", desc: "Every statistic, with its official source", icon: "book" },
+      { href: "/about#roadmap", title: "Roadmap", desc: "Ideas we haven’t built yet", icon: "chart" },
     ],
     feature: {
-      href: "/responsible-ai",
-      eyebrow: "Our promise",
+      href: "/about",
+      eyebrow: "Our approach",
       title: "We explain. You decide.",
       body: "We never tell you which product to choose. The decision stays with you.",
-      cta: "Read our approach",
+      cta: "About Before You Sign",
     },
   },
 ];

@@ -391,3 +391,12 @@ export function creditEstablished(c: CreditProfile): boolean {
   if (c.scores.some((s) => makeScore(s.creditScale, s.creditScore))) return true;
   return !!(c.calculated && c.estimate && creditEstimate(c.estimate).ok);
 }
+
+/** Card utilisation before and after paying down part of the balance. Educational only: it predicts no score. */
+export function utilisationAfterPaydown(limits: number, balances: number, paydown: number): { before: number; after: number; newBalance: number } | null {
+  if (!(limits > 0) || !(balances >= 0)) return null;
+  const pay = Math.min(Math.max(0, paydown), balances);
+  const newBalance = Math.round((balances - pay) * 100) / 100;
+  const pct = (b: number) => Math.round((b / limits) * 1000) / 10;
+  return { before: pct(balances), after: pct(newBalance), newBalance };
+}

@@ -1,16 +1,8 @@
-import type { Metadata } from "next";
-import { Suspense } from "react";
-import { CarJourney } from "@/components/CarJourney";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Before you sign: think it through" };
-
-export default function CheckPage() {
-  return (
-    <div className="container section stack" style={{ gap: 20, paddingTop: 40 }}>
-      <span className="caption">Before You Sign · What could this decision mean for my situation?</span>
-      <Suspense>
-        <CarJourney />
-      </Suspense>
-    </div>
-  );
+// "Think a decision through" is now part of Plan step by step. Old links keep working, query and all.
+export default async function CheckPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) if (typeof v === "string") q.set(k, v);
+  redirect(q.size ? `/plan?${q}` : "/plan");
 }
