@@ -1,18 +1,19 @@
 import Link from "next/link";
 import { Dashboard } from "@/components/Dashboard";
 import { Icon } from "@/components/Icon";
+import { ThreeScales } from "@/components/CreditContext";
 import { StoryDemo, type DemoNumbers } from "@/components/StoryDemo";
-import { creditEstimate, type EstimateInputs } from "@/lib/credit";
+import { bandPosition, CRA_LABEL, makeScore, SCALES, type ScaleId } from "@/lib/credit";
 import { blankPicture, illustrativeProviders, position, schedule, withAmount, type Picture, type Scenario } from "@/lib/sim";
 
 /** The fictional story on the home page. Every number, including the credit estimate, is worked out by our code. */
 function demoNumbers(): DemoNumbers {
-  const answers: EstimateInputs = {
-    onTime: "mostly", missed: "1", defaults: "none", ccj: "no", cardLimits: 5000, cardBalances: 1000, history: "3to6", applications: "2",
-    borrowing: ["card", "loan", "overdraft"], keeping: "comfortably", overdraftRegular: "yes", electoralRoll: "unsure", insolvency: "no",
-  };
-  const est = creditEstimate(answers);
-  if (!est.ok) throw new Error("demo credit answers are incomplete");
+  const scores = ([["experian", 920], ["equifax", 710], ["transunion_new", 680]] as [ScaleId, number][]).map(([id, v]) => {
+    const s = makeScore(id, v);
+    if (!s) throw new Error("demo score outside its scale");
+    const scale = SCALES[id];
+    return { cra: CRA_LABEL[scale.cra], score: v, max: scale.max, band: s.creditBand, bands: scale.bands.map((b) => b.label), at: bandPosition(scale, v) ?? 0 };
+  });
   const purchase = { price: 25000, deposit: 5000, saved: 5000 };
   const providers = illustrativeProviders(purchase);
   const b: Scenario = providers[1];
@@ -29,7 +30,7 @@ function demoNumbers(): DemoNumbers {
   const bonus = 3000;
   const waitMonthly = schedule({ ...b, amount: b.amount - bonus }).regular;
   return {
-    credit: { total: est.estimate.total, band: est.estimate.bandLabel, parts: est.estimate.components.map((c) => ({ label: c.label, points: c.points, max: c.max })) },
+    scores,
     price: purchase.price, deposit: purchase.deposit, financed: b.amount,
     providers: providers.map((p) => ({ name: p.id.toUpperCase(), apr: p.apr, term: p.term, monthly: Math.round(schedule(p).regular) })),
     monthly: Math.round(monthly), salary: 2500, spending: 1450, loan: 180, savings: 5000,
@@ -91,6 +92,15 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="container section stack" style={{ gap: 24 }}>
+        <span className="caption">01 · Understand your credit</span>
+        <h2 className="display">You don’t have just one credit score.</h2>
+        <p className="lead muted">In the UK, Experian, Equifax and TransUnion each use their own scoring system and scale.</p>
+        <ThreeScales />
+        <p className="h2">Different agencies. Different scales. Potentially different information.</p>
+        <p className="lead">But your credit score is still only one part of the decision.</p>
+      </section>
+
       <section className="container section stack" style={{ gap: 28 }}>
         <ol className="flow4" aria-label="Past, today, tomorrow, Before You Sign">
           <li><span className="caption">The past</span><b>Your credit history tells us about the past.</b></li>
@@ -109,10 +119,10 @@ export default function Home() {
       <section className="dark-band section">
         <div className="container grid-2" style={{ alignItems: "center" }}>
           <div className="stack">
-            <span className="caption" style={{ color: "#a6a6aa" }}>01 · Understand your credit</span>
+            <span className="caption" style={{ color: "#a6a6aa" }}>Credit context</span>
             <h2 className="h1">Credit score ≠ affordability</h2>
             <p className="lead" style={{ color: "#d6d6d8" }}>A credit profile can influence how lenders assess an application, and the products or rates they may offer. But a high score doesn’t mean a new commitment fits your life.</p>
-            <p style={{ color: "#d6d6d8" }}>Know your Experian, Equifax or TransUnion score? We’ll show it on that agency’s own scale. Don’t know it? Build a transparent 0–100 educational estimate with us, with every point explained. It’s never presented as an official score.</p>
+            <p style={{ color: "#d6d6d8" }}>Know your Experian, Equifax or TransUnion scores? Enter one, two or all three, and we’ll show each on its own agency’s scale. We never average them. Don’t know them? Build our transparent, educational profile estimate, with every point explained. It’s never presented as an agency score.</p>
             <Link href="/check" className="btn btn-on-dark" style={{ justifySelf: "start" }}>Start with my credit <Icon name="arrow" size={18} /></Link>
           </div>
           <div className="combine">

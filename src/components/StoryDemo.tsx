@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { money } from "@/lib/format";
+import { Gauge } from "./CreditContext";
 import { Icon } from "./Icon";
 
 export interface DemoNumbers {
-  credit: { total: number; band: string; parts: { label: string; points: number; max: number }[] };
+  /** Fictional scores, each placed on its own agency's scale by our code. */
+  scores: { cra: string; score: number; max: number; band: string; bands: string[]; at: number }[];
   price: number; deposit: number; financed: number;
   providers: { name: string; apr: number; term: number; monthly: number }[];
   monthly: number; salary: number; spending: number; loan: number; savings: number;
@@ -38,18 +40,15 @@ export function StoryDemo({ n }: { n: DemoNumbers }) {
   const ref = useRef<HTMLDivElement>(null);
 
   const frames: { stage: number; say: string; show: React.ReactNode }[] = [
-    { stage: 0, say: "Let’s start with my credit.", show: <div className="demo-providers"><span>Repay on time? <b>Mostly</b></span><span>Cards: <b>£1,000 of £5,000</b></span><span>Recent applications: <b>2</b></span><span>Credit for <b>3–6 years</b></span></div> },
-    { stage: 0, say: "My Before You Sign Credit Estimate.", show: (
-      <div className="demo-credit">
-        <div className="demo-score"><b>{n.credit.total}</b><span>/ 100</span></div>
-        <div className="stack" style={{ gap: 4 }}>
-          <span className="small"><b>{n.credit.band}</b></span>
-          {n.credit.parts.map((p) => <span key={p.label} className="demo-part"><span>{p.label}</span><i><i style={{ width: `${(p.points / p.max) * 100}%` }} /></i><span>{p.points}/{p.max}</span></span>)}
-          <span className="small muted">Educational estimate, not an official credit score.</span>
-        </div>
+    { stage: 0, say: "I don’t have just one credit score.", show: (
+      <div className="demo-gauges">
+        {n.scores.map((s) => (
+          <div key={s.cra}><b>{s.cra}</b><Gauge bands={s.bands} at={s.at} value={String(s.score)} sub={`/ ${s.max} · ${s.band}`} label={`${s.cra} ${s.score} out of ${s.max}, ${s.band}`} legend={false} /></div>
+        ))}
       </div>
     ) },
-    { stage: 1, say: "That’s one part of the story. What am I thinking about? A car.", show: <div className="demo-fact"><Icon name="car" size={22} /><b>{money(n.price)}</b><span>car</span></div> },
+    { stage: 0, say: "Three scores tell me about my credit history. But none of them alone tells the whole story.", show: <div className="demo-providers"><span>Different agencies</span><span>Different scales</span><span>Different information</span><span className="muted">Don’t know yours? Build an educational profile estimate</span></div> },
+    { stage: 1, say: "What am I thinking about? A car.", show: <div className="demo-fact"><Icon name="car" size={22} /><b>{money(n.price)}</b><span>car</span></div> },
     { stage: 1, say: `I could put down ${money(n.deposit)}.`, show: <div className="demo-sum"><span>{money(n.price)}</span><span>− {money(n.deposit)} deposit</span><b>= {money(n.financed)} potential finance</b></div> },
     { stage: 1, say: "Different providers, different terms.", show: <div className="demo-providers">{n.providers.map((p) => <span key={p.name}><b>{p.name}</b>{p.apr}% · {p.term}m · {money(p.monthly)}/m</span>)}<span className="muted">Fictional examples</span></div> },
     { stage: 2, say: `But what does ${money(n.monthly)} a month mean for me?`, show: <div className="demo-rows"><span>Salary <b>{money(n.salary)}</b></span><span>Rent, bills, food, travel <b>−{money(n.spending)}</b></span><span>Existing loan <b>−{money(n.loan)}</b></span><span>Normal month leaves <b>{money(n.normal)}</b></span><span>With the car <b>{money(n.withCar)}</b></span></div> },
@@ -103,8 +102,8 @@ export function StoryDemo({ n }: { n: DemoNumbers }) {
         {done && (
           <div className="demo-end">
             <span className="caption">Before You Sign</span>
-            <p className="h2">Know before you commit.</p>
-            <p className="small muted">Fictional example. Every number above, including the credit estimate, was calculated by our code, not AI.</p>
+            <p className="h2">See the decision in the context of your life.</p>
+            <p className="small muted">Fictional example. Each score is read on its own agency’s scale, and every other number was calculated by our code, not AI.</p>
             <Link href="/check" className="btn btn-dark">Start with my credit <Icon name="arrow" size={18} /></Link>
           </div>
         )}

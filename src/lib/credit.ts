@@ -77,7 +77,7 @@ export function bandPosition(scale: Scale, score: number): number | null {
   return (i + (score - b.from + 0.5) / (b.to - b.from + 1)) / scale.bands.length;
 }
 
-/* ---------- Before You Sign Credit Estimate (0–100) ----------
+/* ---------- Before You Sign profile estimate (0–100) ----------
  * OUR transparent, educational model. It is NOT an Experian, Equifax or TransUnion score, and its weights are
  * not theirs. It uses only what the person tells us about their credit behaviour. Income, rent, bonuses, pension
  * and living costs never enter it: affordability is a separate question.
@@ -285,44 +285,61 @@ export function creditEstimate(a: EstimateInputs): EstimateResult {
 
 /* ---------- what the journey stores ---------- */
 
-export interface CreditProfile {
-  mode: "score" | "estimate" | "unknown";
-  creditProvider?: Cra;
-  creditScale?: ScaleId;
-  creditScore?: number;
+/** One official score the person entered themselves, interpreted only on its own agency's scale. */
+export interface CraScore {
+  creditProvider: Cra;
+  creditScale: ScaleId;
+  creditScore: number;
   /** The agency's own band for the score, from its published scale. */
-  creditBand?: string;
+  creditBand: string;
   creditSource: "USER_SUPPLIED";
-  /** Answers for the Before You Sign Credit Estimate. */
+}
+
+export interface CreditProfile {
+  /** Up to one score per agency. Never averaged, never converted between agencies. */
+  scores: CraScore[];
+  /** Answers for the Before You Sign profile estimate (for people who don't know their scores). */
   estimate?: EstimateInputs;
   /** True once the person has pressed "Calculate". */
   calculated?: boolean;
+  creditSource: "USER_SUPPLIED";
 }
 
-export const NO_CREDIT: CreditProfile = { mode: "unknown", creditSource: "USER_SUPPLIED" };
+export const NO_CREDIT: CreditProfile = { scores: [], creditSource: "USER_SUPPLIED" };
 
-export function withScore(c: CreditProfile, scaleId: ScaleId, score: number | undefined): CreditProfile {
+/** The default scale for each agency: its current published one. */
+export const CURRENT_SCALE: Record<Cra, ScaleId> = { experian: "experian", equifax: "equifax", transunion: "transunion_new" };
+
+/** A score on its agency's scale, or null if it isn't a whole number inside that scale. */
+export function makeScore(scaleId: ScaleId, score: number): CraScore | null {
   const scale = SCALES[scaleId];
-  const band = score === undefined ? null : bandFor(scale, score);
-  return { mode: "score", creditProvider: scale.cra, creditScale: scaleId, creditScore: score, creditBand: band?.label, creditSource: "USER_SUPPLIED", estimate: c.estimate };
+  if (!Number.isInteger(score)) return null;
+  const band = bandFor(scale, score);
+  if (!band) return null;
+  return { creditProvider: scale.cra, creditScale: scaleId, creditScore: score, creditBand: band.label, creditSource: "USER_SUPPLIED" };
 }
 
-/** One honest line describing the credit context, for summaries. */
+/** Adds or replaces the score for that agency. */
+export const upsertScore = (c: CreditProfile, s: CraScore): CreditProfile => ({ ...c, scores: [...c.scores.filter((x) => x.creditProvider !== s.creditProvider), s].sort((a, b) => CRA_ORDER.indexOf(a.creditProvider) - CRA_ORDER.indexOf(b.creditProvider)) });
+export const removeScore = (c: CreditProfile, cra: Cra): CreditProfile => ({ ...c, scores: c.scores.filter((x) => x.creditProvider !== cra) });
+export const CRA_ORDER: Cra[] = ["experian", "equifax", "transunion"];
+
+/** "Experian 920 / 1250 (Good)". Always one agency at a time. */
+export const scoreLine = (s: CraScore) => `${CRA_LABEL[s.creditProvider]} ${s.creditScore} / ${SCALES[s.creditScale].max} (${s.creditBand})`;
+
+/** One honest line describing the credit context, for summaries. Scores are listed separately, never combined. */
 export function creditLine(c: CreditProfile): string {
-  if (c.mode === "score" && c.creditScale && c.creditScore !== undefined) {
-    const s = SCALES[c.creditScale];
-    return `${s.name}: ${c.creditScore} out of ${s.max}${c.creditBand ? ` (${s.name.split(" ")[0]}’s “${c.creditBand}” band)` : ""}. You told us this.`;
-  }
-  if (c.mode === "estimate" && c.estimate && c.calculated) {
+  const parts: string[] = [];
+  if (c.scores.length) parts.push(`${c.scores.map(scoreLine).join(" · ")}. Entered by you.`);
+  if (c.calculated && c.estimate) {
     const r = creditEstimate(c.estimate);
-    if (r.ok) return `Before You Sign Credit Estimate: ${r.estimate.total}/100 (${r.estimate.bandLabel}). Our educational model, not an official credit score.`;
+    if (r.ok) parts.push(`Before You Sign profile estimate: ${r.estimate.total}/100 (${r.estimate.bandLabel}). Educational, not an Experian, Equifax or TransUnion score.`);
   }
-  return "Not provided.";
+  return parts.join(" ") || "Not provided.";
 }
 
-/** The journey only continues once the person has a credit result: a valid agency score, or a calculated estimate. */
+/** The journey only continues once there's a credit context: at least one valid agency score, or a calculated estimate. */
 export function creditEstablished(c: CreditProfile): boolean {
-  if (c.mode === "score") return !!(c.creditScale && c.creditScore !== undefined && c.creditBand);
-  if (c.mode === "estimate") return !!(c.calculated && c.estimate && creditEstimate(c.estimate).ok);
-  return false;
+  if (c.scores.some((s) => makeScore(s.creditScale, s.creditScore))) return true;
+  return !!(c.calculated && c.estimate && creditEstimate(c.estimate).ok);
 }

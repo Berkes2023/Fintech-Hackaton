@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { creditEstablished, creditLine } from "@/lib/credit";
+import { creditEstablished, creditLine, type Cra } from "@/lib/credit";
 import { DECISIONS, STAGES, type DecisionKind, type Stage } from "@/lib/decision";
 import { risks, simulate, understandingCheck } from "@/lib/finance";
 import { money, pct } from "@/lib/format";
@@ -19,7 +19,7 @@ import { EventEditor, SourceBadge, WhyBreakdown } from "./CarParts";
 import { Chart } from "./Chart";
 import { CommitCheck } from "./CommitCheck";
 import { CostScanner } from "./CostScanner";
-import { CreditResult, CreditStart } from "./CreditContext";
+import { CreditResult, CreditStart, ThreeScales } from "./CreditContext";
 import { DocumentPanel } from "./DocumentPanel";
 import { Icon } from "./Icon";
 import { startGoal } from "./Journey";
@@ -98,6 +98,8 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
   const established = creditEstablished(st.credit);
   // A goal picked on the home page is remembered, but only offered after the credit context is done.
   const [wanted] = useState(() => params.get("goal") as Goal | null);
+  // Which agency to open when someone chooses "Enter my Experian score" etc. from the result screen.
+  const [craIntent, setCraIntent] = useState<Cra | null>(null);
   // Credit is the gateway: without a credit result, every step (including deep links) shows the credit step.
   const step = established ? rawStep : 0;
   const [levers, setLevers] = useState<Lever[]>([]);
@@ -224,25 +226,28 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
 
       {step === S.credit && (
         <section className="stack journey-card" aria-labelledby="q-credit">
-          <span className="caption">Before You Sign</span>
-          <h2 id="q-credit" className="display">First, let’s understand your credit.</h2>
-          <p className="lead muted">Your credit profile can influence the borrowing options and terms you may encounter. Let’s start there, then we’ll look at what the decision could mean in your situation.</p>
-          <CreditStart credit={st.credit} onChange={(credit) => set({ credit })} onResult={goFromCredit} />
+          <span className="caption">Before You Sign · Step 1</span>
+          <h2 id="q-credit" className="display">Let’s understand your credit</h2>
+          <p className="lead muted">In the UK, you don’t have one universal credit score. Experian, Equifax and TransUnion use different scoring systems. Enter any you know, or none.</p>
+          <CreditStart key={craIntent ?? "start"} initial={craIntent} credit={st.credit} onChange={(credit) => set({ credit })} onResult={goFromCredit} />
         </section>
       )}
 
       {step === S.result && (
         <section className="stack journey-card" aria-labelledby="q-result">
-          <span className="caption">Your credit context</span>
+          <span className="caption">Before You Sign · Step 2</span>
           <h2 id="q-result" className="h1">Your credit context</h2>
-          <CreditResult credit={st.credit} />
-          <div className="transition stack">
-            <p className="display" style={{ fontSize: "clamp(28px, 4vw, 40px)" }}>Your credit profile is one part of the story.</p>
+          <CreditResult credit={st.credit} onEnter={(c) => { setCraIntent(c); go(S.credit); }} />
+          <div className="credit-story stack">
+            <p className="h2">You don’t have just one credit score.</p>
+            <ThreeScales />
+            <p className="lead"><b>Different agencies. Different scales. Potentially different information.</b></p>
+            <p className="display" style={{ fontSize: "clamp(28px, 4vw, 40px)" }}>But your credit score is still only one part of the decision.</p>
             <p className="lead muted">Now let’s look at the decision you’re considering and what it could mean in your situation.</p>
           </div>
           <div className="wizard-nav">
-            <button type="button" className="btn btn-light" onClick={() => go(S.credit)}>Change my answers</button>
-            <button type="button" className="btn btn-dark" onClick={next}>Continue <Icon name="arrow" size={18} /></button>
+            <button type="button" className="btn btn-light" onClick={() => { setCraIntent(null); go(S.credit); }}>Change my answers</button>
+            <button type="button" className="btn btn-dark" onClick={next}>{st.credit.scores.length ? "Continue" : "Continue with estimate"} <Icon name="arrow" size={18} /></button>
           </div>
         </section>
       )}

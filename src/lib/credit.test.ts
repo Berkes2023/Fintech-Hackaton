@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  bandFor, creditEstimate, creditLine, estimateBand, missingAnswers, NO_CREDIT, scalePosition, SCALES, withScore,
+  bandFor, creditEstablished, creditEstimate, creditLine, estimateBand, makeScore, missingAnswers, NO_CREDIT, removeScore, scalePosition, SCALES, upsertScore,
   type Component, type EstimateInputs,
 } from "./credit";
 
@@ -22,16 +22,52 @@ describe("credit scales", () => {
     }
   });
 
-  it("rejects a score outside the chosen scale instead of guessing", () => {
-    expect(bandFor(SCALES.equifax, 1100)).toBeNull();
-    expect(withScore(NO_CREDIT, "transunion_old", 900).creditBand).toBeUndefined();
+  it("validates each agency's own range: Experian 0–1250", () => {
+    expect(makeScore("experian", 0)?.creditBand).toBe("Low");
+    expect(makeScore("experian", 1250)?.creditBand).toBe("Excellent");
+    expect(makeScore("experian", 1251)).toBeNull();
+    expect(makeScore("experian", -1)).toBeNull();
+    expect(makeScore("experian", 920.5)).toBeNull();
+    expect(makeScore("experian", Number.NaN)).toBeNull();
+    expect(makeScore("experian", 920)?.creditBand).toBe("Good");
   });
 
-  it("stores the score as user-supplied, with the agency's band", () => {
-    const c = withScore(NO_CREDIT, "equifax", 700);
-    expect(c).toMatchObject({ creditProvider: "equifax", creditScore: 700, creditBand: "Very good", creditSource: "USER_SUPPLIED" });
-    expect(creditLine(c)).toMatch(/You told us/);
+  it("validates Equifax 0–1000", () => {
+    expect(makeScore("equifax", 1000)?.creditBand).toBe("Excellent");
+    expect(makeScore("equifax", 1001)).toBeNull();
+    expect(makeScore("equifax", 710)?.creditBand).toBe("Very good");
+  });
+
+  it("validates TransUnion on the new 0–999 scale, and the older 0–710 one only when chosen", () => {
+    expect(makeScore("transunion_new", 999)?.creditBand).toBe("Excellent");
+    expect(makeScore("transunion_new", 1000)).toBeNull();
+    expect(makeScore("transunion_new", 680)?.creditBand).toBe("Good");
+    expect(makeScore("transunion_old", 711)).toBeNull();
+    expect(makeScore("transunion_old", 680)?.creditBand).toBe("Excellent");
+  });
+
+  it("never reads one agency's score on another's scale: the same number gets each agency's own band", () => {
+    expect([makeScore("experian", 800)?.creditBand, makeScore("equifax", 800)?.creditBand, makeScore("transunion_new", 800)?.creditBand]).toEqual(["Fair", "Very good", "Excellent"]);
+  });
+
+  it("keeps up to three scores side by side, one per agency, never averaged", () => {
+    let c = upsertScore(NO_CREDIT, makeScore("transunion_new", 680)!);
+    c = upsertScore(c, makeScore("experian", 920)!);
+    c = upsertScore(c, makeScore("equifax", 710)!);
+    c = upsertScore(c, makeScore("experian", 940)!); // replaces, doesn't add
+    expect(c.scores.map((x) => [x.creditProvider, x.creditScore, x.creditBand, x.creditSource])).toEqual([
+      ["experian", 940, "Good", "USER_SUPPLIED"], ["equifax", 710, "Very good", "USER_SUPPLIED"], ["transunion", 680, "Good", "USER_SUPPLIED"],
+    ]);
+    const line = creditLine(c);
+    expect(line).toBe("Experian 940 / 1250 (Good) · Equifax 710 / 1000 (Very good) · TransUnion 680 / 999 (Good). Entered by you.");
+    expect(line).not.toMatch(/average/i);
+    expect(removeScore(c, "equifax").scores).toHaveLength(2);
     expect(scalePosition(SCALES.equifax, 500)).toBeCloseTo(0.5, 5);
+  });
+
+  it("only lets the journey continue with a valid score or a calculated estimate", () => {
+    expect(creditEstablished(NO_CREDIT)).toBe(false);
+    expect(creditEstablished(upsertScore(NO_CREDIT, makeScore("equifax", 600)!))).toBe(true);
   });
 });
 
@@ -122,6 +158,10 @@ describe("Before You Sign Credit Estimate (0–100)", () => {
   });
 
   it("is described as our educational model, never an official score", () => {
-    expect(creditLine({ mode: "estimate", creditSource: "USER_SUPPLIED", estimate: strong, calculated: true })).toMatch(/100\/100.*not an official credit score/);
+    const c = { scores: [], creditSource: "USER_SUPPLIED" as const, estimate: strong, calculated: true };
+    expect(creditLine(c)).toMatch(/profile estimate: 100\/100.*not an Experian, Equifax or TransUnion score/);
+    expect(creditLine(c)).not.toMatch(/your (Experian|Equifax|TransUnion) score/i);
+    expect(creditEstablished(c)).toBe(true);
+    expect(creditEstablished({ ...c, calculated: false })).toBe(false);
   });
 });

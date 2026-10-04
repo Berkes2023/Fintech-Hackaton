@@ -398,7 +398,7 @@ export function exampleCar(): CarState {
       reserves: { savings: 1500, emergency: 500 },
       pension: { amount: 125, alreadyDeducted: true, employer: 75 },
     },
-    credit: { mode: "score", creditProvider: "experian", creditScale: "experian", creditScore: 950, creditBand: "Good", creditSource: "USER_SUPPLIED" },
+    credit: { scores: [{ creditProvider: "experian", creditScale: "experian", creditScore: 920, creditBand: "Good", creditSource: "USER_SUPPLIED" }], creditSource: "USER_SUPPLIED" },
     events: [
       { id: "bonus", label: "Bonus", amount: 3000, month: 1, direction: "in", recurrence: "one_off" },
       { id: "rent", label: "Rent increase", amount: 100, month: 6, direction: "out", recurrence: "recurring_from" },
