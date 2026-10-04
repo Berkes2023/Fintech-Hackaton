@@ -906,6 +906,15 @@ a.tool-card:hover { border-color: var(--color-ink); }
 .footer-legal { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; }
 .footer-legal a { color: inherit; font-size: 13px; }
 
+/* User agreement notice: shown once per device until acknowledged. Non-blocking, quiet, popover-like. */
+.ack-banner { position: fixed; z-index: 60; right: 16px; bottom: 16px; left: 16px; margin-left: auto; max-width: 520px; display: grid; gap: 10px; padding: 18px 20px; background: var(--color-ink); color: var(--color-bone); border: 1px solid var(--color-graphite); border-radius: var(--radius-card); font-size: 15px; line-height: 1.45; }
+.ack-banner p { margin: 0; }
+.ack-banner .small { color: #d6d6d8; }
+.ack-banner .link { color: var(--color-bone); }
+.ack-banner :focus-visible { outline-color: var(--color-bone); }
+@media (prefers-reduced-motion: no-preference) { .ack-banner { animation: ack-in 0.3s ease-out; } }
+@keyframes ack-in { from { opacity: 0; transform: translateY(8px); } }
+
 /* ================= small screens ================= */
 @media (max-width: 420px) {
   .mlabel-rows dd { white-space: normal; }

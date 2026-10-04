@@ -18,7 +18,7 @@ export default function PrivacyPage() {
       <p>Only to show you calculations, explanations and scenarios about a financial decision you’re exploring. We don’t use it for marketing, profiling, credit decisions or anything else.</p>
 
       <h2 className="h2">3. Where your figures are kept</h2>
-      <p>Calculations run in your browser. Your answers (including answers to the credit questions), the figures in the cost checker (including any read from a document), comparisons, commitments, decisions you choose to remember, and the short quotes behind each term of a document you use in Plan are saved in your browser’s local storage on your device (under keys beginning <code>bys:</code>) so they survive a refresh. They are not sent to our server for calculation, and we have no database. They stay until you clear them.</p>
+      <p>Calculations run in your browser. Your answers (including answers to the credit questions), the figures in the cost checker (including any read from a document), comparisons, commitments, decisions you choose to remember, the short quotes behind each term of a document you use in Plan, and the date you acknowledged the <Link href="/agreement" className="link">user agreement</Link> are saved in your browser’s local storage on your device (under keys beginning <code>bys:</code>) so they survive a refresh. They are not sent to our server for calculation, and we have no database. They stay until you clear them.</p>
       <p>We don’t set cookies and we don’t use analytics or advertising trackers.</p>
 
       <h2 className="h2">4. AI processing</h2>

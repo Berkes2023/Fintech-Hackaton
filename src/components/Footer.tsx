@@ -30,6 +30,7 @@ export function Footer() {
             Free, impartial help: MoneyHelper, moneyhelper.org.uk, 0800 138 7777 · StepChange, stepchange.org, 0800 138 1111.
           </p>
           <nav className="footer-legal" aria-label="Legal">
+            <Link href="/agreement">User agreement</Link>
             <Link href="/privacy">Privacy policy</Link>
             <Link href="/terms">Terms &amp; conditions</Link>
             <Link href="/about#sources">Sources &amp; methodology</Link>

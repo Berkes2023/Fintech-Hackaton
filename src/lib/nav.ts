@@ -79,6 +79,7 @@ export const NAV: NavGroup[] = [
       { href: "/about#ai", title: "Calculations & responsible AI", desc: "Code calculates. AI explains.", icon: "calc" },
       { href: "/about#dont", title: "What we don’t do", desc: "No lending, no advice, no rankings", icon: "help" },
       { href: "/about#privacy", title: "Privacy & your data", desc: "What stays on your device, and what AI sees", icon: "shield" },
+      { href: "/agreement", title: "User terms & privacy statement", desc: "The short agreement, and your acknowledgement", icon: "doc" },
       { href: "/about#sources", title: "Sources & methodology", desc: "Every statistic, with its official source", icon: "book" },
       { href: "/about#roadmap", title: "Roadmap", desc: "Ideas we haven’t built yet", icon: "chart" },
     ],
