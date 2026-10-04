@@ -1,4 +1,5 @@
 import { money } from "./format";
+import { NO_CREDIT, type CreditProfile } from "./credit";
 import { monthlyRate } from "./finance";
 
 // The car decision simulator. CODE CALCULATES, AI EXPLAINS.
@@ -61,27 +62,7 @@ export function position(p: Picture, m = 1): Explained {
 export const recurringIncome = (p: Picture, m = 1) => r2(p.income.filter((i) => active(i, m)).reduce((a, i) => a + toMonthly(i.amount, i.freq), 0));
 export const debtPayments = (p: Picture, m = 1) => r2(p.debts.filter((d) => active(d, m)).reduce((a, d) => a + toMonthly(d.amount, d.freq), 0));
 
-/* ---------- credit profile (self-reported, never calculated) ---------- */
-
-export type Band = "excellent" | "good" | "fair" | "needs_work";
-export type ScoreSource = "experian" | "equifax" | "transunion" | "other";
-export interface CreditProfile { mode: "score" | "band" | "unknown"; score?: { value: number; source: ScoreSource }; band?: Band }
-
-export const BAND_LABEL: Record<Band, string> = { excellent: "Excellent", good: "Good", fair: "Fair", needs_work: "Needs work" };
-export const SCORE_SOURCE: Record<ScoreSource, string> = { experian: "Experian", equifax: "Equifax", transunion: "TransUnion", other: "Another provider" };
-
-/** Illustrative example car-finance APRs by self-reported profile. Not offers and not market data. */
-export const EXAMPLE_APR: Record<Band, number> = { excellent: 6.9, good: 8.9, fair: 13.9, needs_work: 22.9 };
-
-/**
- * Which example rates to show. A numeric score is deliberately NOT converted into a band: scores from different
- * agencies use different scales and methods, and there's no documented mapping. Only a chosen band selects rates.
- */
-export function exampleBand(c: CreditProfile): { band: Band | null; note: string } {
-  if (c.mode === "band" && c.band) return { band: c.band, note: `Because you said “${BAND_LABEL[c.band]}”, the examples use rates of about ${EXAMPLE_APR[c.band]}% APR.` };
-  if (c.mode === "score" && c.score) return { band: null, note: `You told us ${c.score.value} (${SCORE_SOURCE[c.score.source]}). We don’t convert scores between agencies, so the examples show the full range of rates.` };
-  return { band: null, note: "You don’t know your credit profile, so the examples show the full range of rates." };
-}
+/* ---------- credit profile: see credit.ts (user-supplied, never calculated, never selects a rate) ---------- */
 
 /* ---------- future events ("what your bank doesn't know yet") ---------- */
 
@@ -108,6 +89,10 @@ export interface Scenario {
   startIn: number;
   fieldSources: Partial<Record<"amount" | "apr" | "term" | "upfrontFee" | "monthlyFee" | "lateFee", Source>>;
   lateFee?: number;
+  /** Fictional provider name, for illustrative scenarios. */
+  provider?: string;
+  /** Plain-English conditions that come with the scenario. */
+  conditions?: string[];
 }
 
 export interface Schedule { payments: number[]; interest: number[]; regular: number; total: number; totalInterest: number; fees: number; cost: number }
@@ -137,22 +122,25 @@ export function schedule(s: Scenario): Schedule {
   return { payments, interest, regular: r2(pay + s.monthlyFee), total: r2(total), totalInterest: r2(totalInterest), fees: r2(fees), cost: r2(totalInterest + fees) };
 }
 
-/** Example scenarios with different rates, terms and fees. Listed by letter, never ranked. */
-export function exampleScenarios(p: Purchase, c: CreditProfile): Scenario[] {
+/**
+ * Fictional, illustrative providers with different APRs, terms, fees and conditions. Not real offers and not
+ * market data. They don't depend on the person's credit profile: real lenders use their own criteria.
+ * Listed by letter, never ranked.
+ */
+export function illustrativeProviders(p: Purchase): Scenario[] {
   const amount = toFinance(p);
-  const { band } = exampleBand(c);
-  const base = band ? EXAMPLE_APR[band] : null;
-  const mk = (id: string, label: string, apr: number, term: number, upfrontFee = 0): Scenario => ({
-    id, label, source: "illustrative", amount, apr, term, upfrontFee, monthlyFee: 0, balloon: 0, startIn: 0,
-    fieldSources: { apr: "illustrative", term: "illustrative", upfrontFee: "illustrative", amount: "we_calculated" }, lateFee: 15,
+  const mk = (id: string, provider: string, apr: number, term: number, upfrontFee: number, lateFee: number, conditions: string[]): Scenario => ({
+    id, label: provider, provider, source: "illustrative", amount, apr, term, upfrontFee, monthlyFee: 0, balloon: 0, startIn: 0, lateFee, conditions,
+    fieldSources: { apr: "illustrative", term: "illustrative", upfrontFee: "illustrative", amount: "we_calculated", lateFee: "illustrative" },
   });
-  if (base === null) {
-    // Unknown profile: show the spread of rates rather than guessing one.
-    return [mk("a", "Example A", EXAMPLE_APR.excellent, 48), mk("b", "Example B", EXAMPLE_APR.good, 48), mk("c", "Example C", EXAMPLE_APR.fair, 48), mk("d", "Example D", EXAMPLE_APR.needs_work, 48)];
-  }
-  const term = p.preferredTerm && p.preferredTerm >= 12 ? p.preferredTerm : 48;
-  return [mk("a", "Example A", base, 36), mk("b", "Example B", base + 0.5, term, 199), mk("c", "Example C", base + 1.5, 60)];
+  return [
+    mk("a", "Provider A (fictional)", 7.9, 48, 295, 25, ["£295 arrangement fee with the first payment", "Hire purchase: the car isn’t yours until the last payment"]),
+    mk("b", "Provider B (fictional)", 9.9, 60, 0, 15, ["No arrangement fee", "Early settlement charge of up to 58 days’ interest"]),
+    mk("c", "Provider C (fictional)", 12.9, 36, 0, 20, ["Shorter term, higher monthly payment", "Optional GAP insurance offered at extra cost"]),
+  ];
 }
+/** Kept for the simplified wizards and tests: the same fictional providers. */
+export const exampleScenarios = (p: Purchase) => illustrativeProviders(p);
 
 /* ---------- the timeline ---------- */
 
@@ -348,7 +336,7 @@ export interface ActualOffer {
 /** The finance scenario being explored. null means "use the worked-out default". */
 export interface FinanceInput { amount: number | null; apr: number | null; term: number | null; fee: number }
 
-export type CarGoal = "car" | "home" | "improve" | "purchase" | "borrow" | "education" | "other";
+export type CarGoal = "car" | "home" | "improve" | "purchase" | "borrowing" | "education" | "other";
 
 export interface CarState {
   goal?: CarGoal;
@@ -386,9 +374,9 @@ export const amountOf = (list: Item[], id: string) => list.find((i) => i.id === 
 
 /** Starts empty: nothing is assumed about the person. */
 export const EMPTY_CAR: CarState = {
-  purchase: { price: 0, deposit: 0, saved: 0, preferredTerm: 48 },
+  purchase: { price: 0, deposit: 0, saved: 0 },
   picture: blankPicture(),
-  credit: { mode: "unknown" },
+  credit: NO_CREDIT,
   events: [],
   finance: { amount: null, apr: null, term: null, fee: 0 },
   use: "mine",
@@ -400,7 +388,7 @@ export function exampleCar(): CarState {
   const fill = <T extends Item>(l: T[], v: Record<string, number>) => l.map((i) => (i.id in v ? { ...i, amount: v[i.id], origin: "mock" as Origin } : i));
   return {
     goal: "car",
-    purchase: { price: 25000, deposit: 5000, saved: 5000, preferredTerm: 48 },
+    purchase: { price: 25000, deposit: 5000, saved: 5000 },
     picture: {
       ...p,
       income: fill(p.income, { salary: 2500 }),
@@ -410,7 +398,7 @@ export function exampleCar(): CarState {
       reserves: { savings: 1500, emergency: 500 },
       pension: { amount: 125, alreadyDeducted: true, employer: 75 },
     },
-    credit: { mode: "band", band: "good" },
+    credit: { mode: "score", creditProvider: "experian", creditScale: "experian", creditScore: 950, creditBand: "Good", creditSource: "USER_SUPPLIED" },
     events: [
       { id: "bonus", label: "Bonus", amount: 3000, month: 1, direction: "in", recurrence: "one_off" },
       { id: "rent", label: "Rent increase", amount: 100, month: 6, direction: "out", recurrence: "recurring_from" },
@@ -421,8 +409,8 @@ export function exampleCar(): CarState {
 }
 export const DEFAULT_CAR = exampleCar();
 
-/** The example APR for the self-reported profile. "Good" when unknown, and always labelled as an example. */
-export const defaultApr = (c: CreditProfile) => EXAMPLE_APR[exampleBand(c).band ?? "good"];
+/** Until the person picks or types terms, the scenario starts from fictional Provider B, labelled as an example. */
+export const DEFAULT_TERMS = { apr: 9.9, term: 60 };
 
 /** The one scenario the journey simulates: the decoded offer if chosen, otherwise the person's own scenario. */
 export function carScenario(st: CarState): Scenario {
@@ -430,9 +418,9 @@ export function carScenario(st: CarState): Scenario {
   const f = st.finance;
   return {
     id: "mine", label: "Your scenario", source: "you_told_us",
-    amount: f.amount ?? toFinance(st.purchase), apr: f.apr ?? defaultApr(st.credit), term: f.term ?? st.purchase.preferredTerm ?? 48,
+    amount: f.amount ?? toFinance(st.purchase), apr: f.apr ?? DEFAULT_TERMS.apr, term: f.term ?? DEFAULT_TERMS.term,
     upfrontFee: f.fee, monthlyFee: 0, balloon: 0, startIn: 0,
-    fieldSources: { amount: f.amount === null ? "we_calculated" : "you_told_us", apr: f.apr === null ? "illustrative" : "you_told_us", term: "you_told_us", upfrontFee: "you_told_us" },
+    fieldSources: { amount: f.amount === null ? "we_calculated" : "you_told_us", apr: f.apr === null ? "illustrative" : "you_told_us", term: f.term === null ? "illustrative" : "you_told_us", upfrontFee: "you_told_us" },
   };
 }
 

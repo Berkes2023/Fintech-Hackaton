@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { simulate } from "./finance";
 import {
-  applyLevers, BANNED, blankPicture, carScenario, EMPTY_CAR, eventLine, eventTag, exampleBand, exampleCar, exampleScenarios, habit, hiddenCost, impact, position, recurringIncome, schedule,
+  applyLevers, BANNED, blankPicture, carScenario, EMPTY_CAR, eventLine, eventTag, exampleCar, illustrativeProviders, habit, hiddenCost, impact, position, recurringIncome, schedule,
   simulateMonths, statements, toMonthly, type FutureEvent, type Picture, type Scenario,
 } from "./sim";
 
@@ -83,11 +83,15 @@ describe("finance scenarios", () => {
     expect(schedule({ ...car, startIn: 2 }).payments.slice(0, 3).map((x) => x > 0)).toEqual([false, false, true]);
   });
 
-  it("uses a chosen profile to pick example rates, and never converts a numeric score", () => {
-    expect(exampleBand({ mode: "band", band: "good" }).band).toBe("good");
-    expect(exampleBand({ mode: "score", score: { value: 720, source: "transunion" } }).band).toBeNull();
-    expect(exampleScenarios({ price: 25000, deposit: 5000, saved: 0 }, { mode: "unknown" }).map((s) => s.apr)).toHaveLength(4);
-    expect(exampleScenarios({ price: 25000, deposit: 5000, saved: 0 }, { mode: "band", band: "good" }).every((s) => s.amount === 20000)).toBe(true);
+  it("offers three fictional providers that finance price minus deposit, whatever the credit profile", () => {
+    const ps = illustrativeProviders({ price: 25000, deposit: 5000, saved: 0 });
+    expect(ps).toHaveLength(3);
+    expect(ps.every((p) => p.amount === 20000 && p.source === "illustrative" && /fictional/.test(p.provider ?? ""))).toBe(true);
+    expect(new Set(ps.map((p) => p.apr)).size).toBe(3);
+  });
+
+  it("Provider B on £20,000 is about £420 a month, as the story says", () => {
+    close(schedule(illustrativeProviders({ price: 25000, deposit: 5000, saved: 0 })[1]).regular, 419.4, 1);
   });
 });
 
@@ -159,7 +163,7 @@ describe("the /check car journey", () => {
   it("finances price minus deposit, at the example rate for the profile until the person changes it", () => {
     const sc = carScenario(user());
     expect(sc.amount).toBe(20000);
-    expect(sc.apr).toBe(8.9);
+    expect(sc.apr).toBe(9.9);
     expect(carScenario({ ...user(), finance: { amount: null, apr: 12, term: 60, fee: 0 } }).apr).toBe(12);
   });
 

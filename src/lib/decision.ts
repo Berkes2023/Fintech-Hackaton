@@ -2,7 +2,7 @@
 //   credit context → what you're thinking about → cost → upfront money → finance → situation → future → simulation.
 // Only the car is fully built for the prototype; the others reuse the same stages and sim.ts when they're built.
 
-export type DecisionKind = "car" | "home" | "improve" | "purchase" | "borrowing" | "other";
+export type DecisionKind = "car" | "home" | "improve" | "purchase" | "borrowing" | "education" | "other";
 
 export interface DecisionCopy {
   label: string;
@@ -42,6 +42,11 @@ export const DECISIONS: Record<DecisionKind, DecisionCopy> = {
     label: "Manage existing borrowing", status: "guide", thing: "your borrowing",
     cost: "", upfront: "", financeName: "", financeQuestion: "",
   },
+  education: {
+    label: "Education", status: "simplified", thing: "the course",
+    cost: "How much does the course cost?", upfront: "How much could you pay yourself?",
+    financeName: "course finance", financeQuestion: "How might you pay for the rest?",
+  },
   other: {
     label: "Something else", status: "guide", thing: "it",
     cost: "", upfront: "", financeName: "", financeQuestion: "",
@@ -49,5 +54,5 @@ export const DECISIONS: Record<DecisionKind, DecisionCopy> = {
 };
 
 /** The stages every decision passes through, in the order a person naturally thinks about them. */
-export const STAGES = ["Credit", "Your idea", "The cost", "Finance", "Your situation", "Your future", "Simulation", "What if", "Before you sign"] as const;
+export const STAGES = ["Credit context", "Goal", "Purchase", "Finance", "My situation", "Future", "Simulation", "What if", "Decode It", "Before you sign"] as const;
 export type Stage = (typeof STAGES)[number];

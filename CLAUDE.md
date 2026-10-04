@@ -32,7 +32,9 @@ Users enter a commitment-based product (loan, credit card, overdraft, BNPL, subs
 - `src/lib/dna.ts`: Product DNA (universal schema), questions to ask, reverse calculator, future-payment dates, commitment map. `src/lib/concepts.ts`: fixed explainers for the learning nudge and misconceptions.
 - Pages: `/firewall` (Commitment Firewall demo), `/commitments` (commitment map), `/reverse`, `/diff` (contract diff), `/developers`.
 - **Car decision journey** (`/check`, the MVP; `/decide/car` redirects there; the old cost checker is `/cost-checker`). Stages come from `src/lib/decision.ts`, reusable for other decisions: `src/lib/sim.ts` is its tested engine (financial picture, self-reported credit profile, future events, finance scenarios, month-by-month simulation, hidden cost, what-ifs, careful wording). UI in `src/components/CarJourney.tsx` + `CarParts.tsx`. One-off money is never recurring; credit profile never feeds affordability; every number carries a source badge.
-- Home is a decision dashboard (`Dashboard.tsx`); other goals use the simplified wizard (`/plan`, `journey.ts`) and `/start` helps people who aren’t sure.
+- Home sells the story (`src/app/page.tsx`): hero, animated `StoryDemo.tsx` (fictional data, every figure from `sim.ts`, respects reduced motion), problem, credit ≠ affordability, journey path, supporting tools and roadmap. Other goals use the simplified wizard (`/plan`, `journey.ts`) and `/start` helps people who aren’t sure.
+- `src/lib/credit.ts`: credit context. Published Experian (0–1250), Equifax (0–1000) and TransUnion (0–999 new, 0–710 older) scales, checked 4 Oct 2026, with sources. Scores are USER_SUPPLIED, never calculated, converted or linked to a rate. “Explore my credit profile” gives a labelled Before You Sign indicator traced to answers. UI in `CreditContext.tsx`.
+- Finance scenarios in the journey are fictional Providers A/B/C (`illustrativeProviders`), independent of credit profile. Never invent real lender rates.
 - `analysis/rates_vs_assets.py`: pandas script correlating asset moves with rate changes (same sources).
 
 ## Commands

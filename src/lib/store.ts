@@ -68,7 +68,7 @@ export const journeyStore = createStore<Situation>("bys:journey", DEFAULT_SITUAT
 });
 
 /** The car decision journey. Browser-only. */
-export const carStore = createStore<CarState>("bys:car2", EMPTY_CAR, (x): x is CarState => {
+export const carStore = createStore<CarState>("bys:car3", EMPTY_CAR, (x): x is CarState => {
   const s = x as CarState;
-  return !!s && typeof s === "object" && !!s.purchase && !!s.picture && Array.isArray(s.picture.income) && Array.isArray(s.events) && !!s.credit && !!s.finance;
+  return !!s && typeof s === "object" && !!s.purchase && !!s.picture && Array.isArray(s.picture.income) && Array.isArray(s.events) && !!s.credit && s.credit.creditSource === "USER_SUPPLIED" && !!s.finance;
 });
