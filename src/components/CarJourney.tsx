@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { creditLine } from "@/lib/credit";
+import { creditEstablished, creditLine } from "@/lib/credit";
 import { DECISIONS, STAGES, type DecisionKind, type Stage } from "@/lib/decision";
 import { risks, simulate, understandingCheck } from "@/lib/finance";
 import { money, pct } from "@/lib/format";
 import type { Mark } from "@/lib/highlight";
-import type { Goal } from "@/lib/journey";
+import { GOALS, type Goal } from "@/lib/journey";
 import {
   amountOf, applyLevers, carScenario, debtPayments, EMPTY_CAR, eventAmount, eventLine, eventTag, exampleCar,
   hiddenCost, illustrativeProviders, impact, LEVERS, position, recurringIncome, schedule, simulateMonths, statements, toFinance, toMonthly,
@@ -19,7 +19,7 @@ import { EventEditor, SourceBadge, WhyBreakdown } from "./CarParts";
 import { Chart } from "./Chart";
 import { CommitCheck } from "./CommitCheck";
 import { CostScanner } from "./CostScanner";
-import { CreditContext } from "./CreditContext";
+import { CreditResult, CreditStart } from "./CreditContext";
 import { DocumentPanel } from "./DocumentPanel";
 import { Icon } from "./Icon";
 import { startGoal } from "./Journey";
@@ -27,8 +27,9 @@ import { PasteFill, type FillResult } from "./PasteFill";
 
 // One natural question per screen, in the order a person thinks a decision through.
 const STEPS: { stage: Stage; title: string }[] = [
+  { stage: "Credit context", title: "Understand your credit" },
   { stage: "Credit context", title: "Your credit context" },
-  { stage: "Goal", title: "What are you hoping to do?" },
+  { stage: "Goal", title: "What are you thinking about?" },
   { stage: "Purchase", title: "The car" },
   { stage: "Purchase", title: "How it could be funded" },
   { stage: "Finance", title: "Finance scenarios" },
@@ -45,8 +46,8 @@ const STEPS: { stage: Stage; title: string }[] = [
   { stage: "Before you sign", title: "Before you sign" },
 ];
 const S = {
-  credit: 0, goal: 1, price: 2, deposit: 3, finance: 4, income: 5, spending: 6, borrowing: 7, buffer: 8, longterm: 9,
-  future: 10, impact: 11, timeline: 12, whatif: 13, decode: 14, summary: 15,
+  credit: 0, result: 1, goal: 2, price: 3, deposit: 4, finance: 5, income: 6, spending: 7, borrowing: 8, buffer: 9, longterm: 10,
+  future: 11, impact: 12, timeline: 13, whatif: 14, decode: 15, summary: 16,
 } as const;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -93,7 +94,12 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
   const set = (patch: Partial<CarState>) => carStore.set({ ...st, ...patch });
   const setPicture = (patch: Partial<Picture>) => set({ picture: { ...st.picture, ...patch } });
   const setAmt = (k: ListKey, id: string, v: number) => setPicture({ [k]: st.picture[k].map((i: Item) => (i.id === id ? { ...i, amount: v, freq: "monthly", origin: "manual" } : i)) } as Partial<Picture>);
-  const [step, setStep] = useState(() => { const q = Number(params.get("step")); return q >= 1 && q <= STEPS.length ? q - 1 : startAt; });
+  const [rawStep, setStep] = useState(() => { const q = Number(params.get("step")); return q >= 1 && q <= STEPS.length ? q - 1 : startAt; });
+  const established = creditEstablished(st.credit);
+  // A goal picked on the home page is remembered, but only offered after the credit context is done.
+  const [wanted] = useState(() => params.get("goal") as Goal | null);
+  // Credit is the gateway: without a credit result, every step (including deep links) shows the credit step.
+  const step = established ? rawStep : 0;
   const [levers, setLevers] = useState<Lever[]>([]);
   const [amounts, setAmounts] = useState({ rent: 100, salary: 150 });
   const [horizon, setHorizon] = useState(12);
@@ -107,6 +113,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
   const start = thisMonth();
   const monthName = (m: number) => { const [y, mo] = start.split("-").map(Number); const k = y * 12 + (mo - 1) + m; return `${MONTHS[k % 12]} ${Math.floor(k / 12)}`; };
   const go = (n: number) => { setStep(Math.max(0, Math.min(n, STEPS.length - 1))); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const goFromCredit = () => { setStep(S.result); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const next = () => go(step + 1), back = () => go(step - 1);
 
   const p = st.picture;
@@ -217,17 +224,39 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
 
       {step === S.credit && (
         <section className="stack journey-card" aria-labelledby="q-credit">
-          <span className="caption">Start with your credit context</span>
-          <h2 id="q-credit" className="h1">Which credit score are you using?</h2>
-          <p className="muted">The UK has three main credit reference agencies. Each has its own scale, so we’ll show yours on the right one.</p>
-          <CreditContext credit={st.credit} onChange={(credit) => set({ credit })} />
-          {nav("Next: my goal")}
+          <span className="caption">Before You Sign</span>
+          <h2 id="q-credit" className="display">First, let’s understand your credit.</h2>
+          <p className="lead muted">Your credit profile can influence the borrowing options and terms you may encounter. Let’s start there, then we’ll look at what the decision could mean in your situation.</p>
+          <CreditStart credit={st.credit} onChange={(credit) => set({ credit })} onResult={goFromCredit} />
+        </section>
+      )}
+
+      {step === S.result && (
+        <section className="stack journey-card" aria-labelledby="q-result">
+          <span className="caption">Your credit context</span>
+          <h2 id="q-result" className="h1">Your credit context</h2>
+          <CreditResult credit={st.credit} />
+          <div className="transition stack">
+            <p className="display" style={{ fontSize: "clamp(28px, 4vw, 40px)" }}>Your credit profile is one part of the story.</p>
+            <p className="lead muted">Now let’s look at the decision you’re considering and what it could mean in your situation.</p>
+          </div>
+          <div className="wizard-nav">
+            <button type="button" className="btn btn-light" onClick={() => go(S.credit)}>Change my answers</button>
+            <button type="button" className="btn btn-dark" onClick={next}>Continue <Icon name="arrow" size={18} /></button>
+          </div>
         </section>
       )}
 
       {step === S.goal && (
         <section className="stack journey-card" aria-labelledby="q-goal">
-          <h2 id="q-goal" className="display">What are you hoping to do?</h2>
+          <span className="caption">✓ Credit context done · {creditLine(st.credit)}</span>
+          <h2 id="q-goal" className="display">What are you thinking about?</h2>
+          {wanted && wanted !== "car" && wanted !== "invest" && (
+            <div className="notice row" style={{ justifyContent: "space-between" }}>
+              <span>You picked <b>{GOALS[wanted].label}</b> on the home page.</span>
+              <button type="button" className="btn btn-dark btn-sm" onClick={() => { journeyStore.set(startGoal(journeyStore.get(), wanted)); router.push("/plan?step=1"); }}>Continue with it <Icon name="arrow" size={16} /></button>
+            </div>
+          )}
           <div className="goal-grid">
             {GOAL_ORDER.map(({ kind, icon }) => {
               const d = DECISIONS[kind];
@@ -238,7 +267,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
                 router.push(kind === "borrowing" ? "/commitments" : "/start");
               };
               return (
-                <button key={kind} type="button" className={`goal${st.goal === kind ? " on" : ""}${kind === "car" ? " featured" : ""}`} onClick={pick}>
+                <button key={kind} type="button" className={`goal${st.goal === kind || (kind === "car" && wanted === "car") ? " on" : ""}${kind === "car" ? " featured" : ""}`} onClick={pick}>
                   <span className="goal-icon" aria-hidden="true"><Icon name={icon} size={28} /></span>
                   <b>{d.label}</b>
                   <span className="small muted">{d.status === "full" ? "Full story journey" : d.status === "simplified" ? "Simplified for now" : "We’ll point you somewhere useful"}</span>
@@ -330,7 +359,7 @@ export function CarJourney({ startAt = 0 }: { startAt?: number }) {
         <div className="picture-layout">
           <section className="stack journey-card">
             {step === S.income && (<>
-              <p className="insight lead">{money(sch.regular, true)} a month is only one number. What would it mean in your situation?</p>
+              <p className="insight lead">Your credit profile is only part of the story. {money(sch.regular, true)} a month is only one number: what would it mean in your situation?</p>
               <h2 className="h1">What money regularly comes in?</h2>
               <p className="muted">After tax, each month. Rough is fine, and everything stays in your browser.</p>
               {fields("income", [["salary", "Take-home salary"], ["other", "Other recurring income", "Only money that arrives every month."]])}

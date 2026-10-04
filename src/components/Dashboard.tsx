@@ -14,13 +14,13 @@ const TOOLS = [
   { href: "/learn", title: "Learn the words", desc: "APR, EAR and more, in plain English", icon: "book" },
 ];
 
-/** The home dashboard: pick what you want to do, and the wizard takes it from there. */
+/** The home dashboard: pick what you want to do. Borrowing decisions start with your credit context at /check. */
 export function Dashboard() {
   const router = useRouter();
   const open = (g: Goal) => {
-    if (g === "car") { router.push("/check?step=3"); return; }
-    journeyStore.set(startGoal(journeyStore.get(), g));
-    router.push("/plan?step=1");
+    // Saving or investing doesn't involve borrowing, so it goes straight to its wizard.
+    if (g === "invest") { journeyStore.set(startGoal(journeyStore.get(), g)); router.push("/plan?step=1"); return; }
+    router.push(`/check?goal=${g}`);
   };
   return (
     <div className="dash anchor-target" id="dashboard">

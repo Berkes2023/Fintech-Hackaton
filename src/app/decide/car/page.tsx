@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// The car journey lives at /check. This keeps old links working and opens it at the car's price.
+// The car journey lives at /check. This keeps old links working and opens it with the car goal remembered (credit comes first).
 export default function CarPage() {
-  redirect("/check?step=3");
+  redirect("/check?goal=car");
 }

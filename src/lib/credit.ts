@@ -77,109 +77,226 @@ export function bandPosition(scale: Scale, score: number): number | null {
   return (i + (score - b.from + 0.5) / (b.to - b.from + 1)) / scale.bands.length;
 }
 
-/* ---------- "I don't know my score": explore the profile instead ---------- */
+/* ---------- Before You Sign Credit Estimate (0–100) ----------
+ * OUR transparent, educational model. It is NOT an Experian, Equifax or TransUnion score, and its weights are
+ * not theirs. It uses only what the person tells us about their credit behaviour. Income, rent, bonuses, pension
+ * and living costs never enter it: affordability is a separate question.
+ *
+ *   Payment history        35
+ *   Credit utilisation     25
+ *   Credit history length  15
+ *   Recent applications    10
+ *   Existing borrowing     10
+ *   Stability / report      5
+ *   Total                 100
+ */
 
-export type QuestionId = "onTime" | "missed" | "borrowing" | "utilisation" | "applications" | "history" | "records";
-export type Effect = "stronger" | "neutral" | "worth" | "unknown";
-export interface Option { id: string; label: string; effect: Effect; why: string }
-export interface Question { id: QuestionId; ask: string; options: Option[] }
+export type OnTime = "always" | "mostly" | "often_late" | "no_history";
+export type Missed = "0" | "1" | "2" | "3plus";
+export type Defaults = "none" | "one" | "more";
+export type HistoryLength = "none" | "under1" | "1to3" | "3to6" | "6plus";
+export type Applications = "0" | "1" | "2" | "3" | "4plus";
+export type BorrowingKind = "loan" | "card" | "car" | "overdraft" | "bnpl" | "other";
+export type Keeping = "comfortably" | "sometimes" | "often";
 
-const NS = (why = "You weren’t sure, so this answer isn’t used."): Option => ({ id: "unsure", label: "Not sure", effect: "unknown", why });
+export interface EstimateInputs {
+  onTime?: OnTime;
+  /** Missed repayments in the last 12 months. */
+  missed?: Missed;
+  /** Defaults in the last 6 years. */
+  defaults?: Defaults;
+  /** County court judgments (CCJs) in the last 6 years. */
+  ccj?: "no" | "yes";
+  /** Total credit-card limits, £. */
+  cardLimits?: number;
+  /** Current credit-card balances, £. */
+  cardBalances?: number;
+  history?: HistoryLength;
+  applications?: Applications;
+  borrowing?: BorrowingKind[];
+  /** How the person keeps up with existing repayments (asked only if they have borrowing). */
+  keeping?: Keeping;
+  /** Regularly using an arranged overdraft (asked only if they have one). */
+  overdraftRegular?: "no" | "yes";
+  electoralRoll?: "yes" | "no" | "unsure";
+  /** Bankruptcy, an IVA or a debt relief order in the last 6 years. */
+  insolvency?: "no" | "yes";
+}
 
-/** Factors that can appear on a UK credit report. Plain questions; no weights are invented. */
-export const QUESTIONS: Question[] = [
-  { id: "onTime", ask: "Do you usually make repayments on time?", options: [
-    { id: "always", label: "Always", effect: "stronger", why: "Repaying on time is generally seen positively on a credit report." },
-    { id: "mostly", label: "Mostly", effect: "neutral", why: "An occasional late payment can show on a credit report." },
-    { id: "often_late", label: "Often late", effect: "worth", why: "Regular late payments can be recorded and may affect how lenders see an application." },
-    { id: "no_credit", label: "I don’t have any credit yet", effect: "neutral", why: "With little credit history, there’s less for lenders to go on." },
-    NS(),
-  ] },
-  { id: "missed", ask: "Have you missed a repayment in the last 12 months?", options: [
-    { id: "no", label: "No", effect: "stronger", why: "No recent missed payments." },
-    { id: "once", label: "Once", effect: "neutral", why: "A single recent missed payment can show on a credit report." },
-    { id: "more", label: "More than once", effect: "worth", why: "Several recent missed payments can be recorded and may matter to lenders." },
-    NS(),
-  ] },
-  { id: "borrowing", ask: "How much do you already borrow, not counting a mortgage?", options: [
-    { id: "none", label: "Nothing", effect: "neutral", why: "No existing borrowing to repay." },
-    { id: "some", label: "A little, easy to manage", effect: "stronger", why: "Borrowing that you say is easy to manage." },
-    { id: "a_lot", label: "Quite a lot", effect: "worth", why: "Lenders usually look at how much you already owe." },
-    NS(),
-  ] },
-  { id: "utilisation", ask: "How much of your credit-card and overdraft limits are you using?", options: [
-    { id: "low", label: "Under 30%", effect: "stronger", why: "Using a smaller share of your limits is often seen positively." },
-    { id: "mid", label: "Between 30% and 75%", effect: "neutral", why: "A moderate share of your limits in use." },
-    { id: "high", label: "Over 75%", effect: "worth", why: "Using most of your available limits can affect how lenders see you." },
-    { id: "none", label: "I don’t have cards or an overdraft", effect: "neutral", why: "No revolving credit to look at." },
-    NS(),
-  ] },
-  { id: "applications", ask: "How many times have you applied for credit in the last 6 months?", options: [
-    { id: "zero", label: "None", effect: "stronger", why: "No recent applications showing." },
-    { id: "few", label: "Once or twice", effect: "neutral", why: "A couple of recent applications." },
-    { id: "many", label: "Three or more", effect: "worth", why: "Several recent applications in a short time can be noticed by lenders." },
-    NS(),
-  ] },
-  { id: "history", ask: "How long have you had credit accounts?", options: [
-    { id: "under1", label: "Less than a year", effect: "neutral", why: "A short credit history gives lenders less to go on." },
-    { id: "1to3", label: "1 to 3 years", effect: "neutral", why: "A few years of credit history." },
-    { id: "over3", label: "More than 3 years", effect: "stronger", why: "A longer credit history." },
-    { id: "never", label: "I’ve never had credit", effect: "neutral", why: "No credit history yet, so there’s little for lenders to go on." },
-    NS(),
-  ] },
-  { id: "records", ask: "Do you know of any CCJs, defaults, an IVA or bankruptcy in the last 6 years?", options: [
-    { id: "no", label: "No", effect: "stronger", why: "No adverse records that you know of." },
-    { id: "yes", label: "Yes", effect: "worth", why: "Records like these usually stay on a credit report for 6 years and can matter to lenders." },
-    NS(),
-  ] },
-];
-
-export type ExploreAnswers = Partial<Record<QuestionId, string>>;
-export type Indicator = "stronger" | "mixed" | "worth" | "insufficient";
-export const INDICATOR_LABEL: Record<Indicator, string> = {
-  stronger: "Stronger profile indicators",
-  mixed: "Mixed profile indicators",
-  worth: "Some factors worth understanding",
-  insufficient: "Insufficient information",
+export const LABELS = {
+  onTime: { always: "Always on time", mostly: "Mostly on time", often_late: "Often late", no_history: "I don’t have any repayments yet" } as Record<OnTime, string>,
+  missed: { "0": "None", "1": "One", "2": "Two", "3plus": "Three or more" } as Record<Missed, string>,
+  defaults: { none: "None", one: "One", more: "More than one" } as Record<Defaults, string>,
+  ccj: { no: "No", yes: "Yes" },
+  history: { none: "No previous credit history", under1: "Under 1 year", "1to3": "1–3 years", "3to6": "3–6 years", "6plus": "6+ years" } as Record<HistoryLength, string>,
+  applications: { "0": "0", "1": "1", "2": "2", "3": "3", "4plus": "4+" } as Record<Applications, string>,
+  borrowing: { loan: "Personal loan", card: "Credit card", car: "Car finance", overdraft: "Overdraft", bnpl: "Buy Now Pay Later", other: "Other borrowing" } as Record<BorrowingKind, string>,
+  keeping: { comfortably: "Comfortably", sometimes: "I sometimes struggle", often: "I often struggle" } as Record<Keeping, string>,
+  yesNo: { no: "No", yes: "Yes" },
+  electoralRoll: { yes: "Yes", no: "No", unsure: "Not sure" },
 };
 
-export interface Reason { question: string; answer: string; effect: Effect; why: string }
-export interface ExploreResult { indicator: Indicator; label: string; summary: string; reasons: Reason[]; answered: number }
+export type ComponentKey = "payment" | "utilisation" | "history" | "applications" | "borrowing" | "stability";
+export interface Step { text: string; points: number }
+export interface Component { key: ComponentKey; label: string; max: number; points: number; steps: Step[]; why: string[] }
+export type EstimateBand = "stronger" | "positive" | "mixed" | "weaker" | "significant";
+export interface Estimate { total: number; band: EstimateBand; bandLabel: string; components: Component[]; utilisation: number | null }
+export type EstimateResult = { ok: true; estimate: Estimate } | { ok: false; missing: string[]; invalid: string[] };
 
-/** A Before You Sign credit profile: not a score, and every conclusion traces back to an answer. */
-export function exploreProfile(a: ExploreAnswers): ExploreResult {
-  const reasons: Reason[] = [];
-  for (const q of QUESTIONS) {
-    const o = q.options.find((x) => x.id === a[q.id]);
-    if (o) reasons.push({ question: q.ask, answer: o.label, effect: o.effect, why: o.why });
+export const COMPONENT_MAX: Record<ComponentKey, number> = { payment: 35, utilisation: 25, history: 15, applications: 10, borrowing: 10, stability: 5 };
+export const COMPONENT_LABEL: Record<ComponentKey, string> = {
+  payment: "Payment history", utilisation: "Credit utilisation", history: "Credit history", applications: "Recent applications", borrowing: "Existing borrowing", stability: "Stability",
+};
+
+/** Before You Sign bands. Not CRA bands. */
+export const ESTIMATE_BANDS: { band: EstimateBand; from: number; to: number; label: string }[] = [
+  { band: "significant", from: 0, to: 19, label: "Significant weaker indicators" },
+  { band: "weaker", from: 20, to: 39, label: "Some weaker indicators" },
+  { band: "mixed", from: 40, to: 59, label: "Mixed indicators" },
+  { band: "positive", from: 60, to: 79, label: "Generally positive indicators" },
+  { band: "stronger", from: 80, to: 100, label: "Stronger indicators" },
+];
+export const estimateBand = (total: number) => ESTIMATE_BANDS.find((b) => total >= b.from && total <= b.to) ?? ESTIMATE_BANDS[0];
+
+/** Utilisation bands for this model (not official CRA bands): [up to %, points]. */
+export const UTILISATION_POINTS: [number, number][] = [[10, 25], [30, 21], [50, 15], [75, 9], [100, 4], [Infinity, 0]];
+
+const okMoney = (x: unknown) => typeof x === "number" && Number.isFinite(x) && x >= 0;
+const clamp = (x: number, max: number) => Math.max(0, Math.min(max, x));
+
+/** Which questions still need an answer, given the answers so far (some are only asked when relevant). */
+export function missingAnswers(a: EstimateInputs): string[] {
+  const m: string[] = [];
+  if (!a.onTime) m.push("onTime");
+  if (a.onTime !== "no_history") {
+    if (!a.missed) m.push("missed");
+    if (!a.defaults) m.push("defaults");
+    if (!a.ccj) m.push("ccj");
   }
-  const known = reasons.filter((r) => r.effect !== "unknown");
-  const worth = known.filter((r) => r.effect === "worth").length;
-  const stronger = known.filter((r) => r.effect === "stronger").length;
-  let indicator: Indicator;
-  if (known.length < 4) indicator = "insufficient";
-  else if (worth > 0) indicator = worth >= 2 || a.records === "yes" ? "worth" : "mixed";
-  else indicator = stronger >= 4 ? "stronger" : "mixed";
-  const summary = {
-    insufficient: `You answered ${known.length} of ${QUESTIONS.length} questions with something other than “Not sure”, which isn’t enough to describe a profile.`,
-    stronger: `${stronger} of your answers point to things lenders often see positively, and none point to common concerns.`,
-    mixed: `Your answers include ${stronger} positive indicator${stronger === 1 ? "" : "s"}${worth ? ` and ${worth} factor worth understanding` : ""}.`,
-    worth: `${worth} of your answers point to factors that lenders may look at closely.`,
-  }[indicator];
-  return { indicator, label: INDICATOR_LABEL[indicator], summary, reasons, answered: known.length };
+  if (a.cardLimits === undefined) m.push("cardLimits");
+  if (a.cardBalances === undefined) m.push("cardBalances");
+  if (!a.history) m.push("history");
+  if (!a.applications) m.push("applications");
+  if (!a.borrowing) m.push("borrowing");
+  if (a.borrowing?.length && !a.keeping) m.push("keeping");
+  if (a.borrowing?.includes("overdraft") && !a.overdraftRegular) m.push("overdraftRegular");
+  if (!a.electoralRoll) m.push("electoralRoll");
+  if (!a.insolvency) m.push("insolvency");
+  return m;
+}
+
+/** The deterministic calculation. Same answers, same number, every time. */
+export function creditEstimate(a: EstimateInputs): EstimateResult {
+  const missing = missingAnswers(a);
+  const invalid: string[] = [];
+  if (a.cardLimits !== undefined && !okMoney(a.cardLimits)) invalid.push("cardLimits");
+  if (a.cardBalances !== undefined && !okMoney(a.cardBalances)) invalid.push("cardBalances");
+  if (missing.length || invalid.length) return { ok: false, missing, invalid };
+
+  // 1. Payment history (35)
+  const pay: Step[] = [];
+  const payWhy: string[] = [];
+  if (a.onTime === "no_history") {
+    pay.push({ text: "No repayment history yet: nothing positive or negative to count, so this starts in the middle", points: 20 });
+    payWhy.push("You told us you don’t have any repayments yet.");
+  } else {
+    pay.push({ text: "Starting points", points: 35 });
+    const onTime = { always: 0, mostly: -4, often_late: -12 }[a.onTime!];
+    if (onTime) pay.push({ text: a.onTime === "mostly" ? "Mostly, not always, on time" : "Often late", points: onTime });
+    payWhy.push({ always: "You told us you always repay on time.", mostly: "You told us you usually repay on time.", often_late: "You told us you’re often late with repayments." }[a.onTime!]);
+    const missed = { "0": 0, "1": -5, "2": -9, "3plus": -14 }[a.missed!];
+    if (missed) pay.push({ text: `${LABELS.missed[a.missed!]} missed repayment${a.missed === "1" ? "" : "s"} in the last 12 months`, points: missed });
+    payWhy.push(a.missed === "0" ? "You reported no missed repayments in the last 12 months." : `You reported ${LABELS.missed[a.missed!].toLowerCase()} missed repayment${a.missed === "1" ? "" : "s"} in the last 12 months.`);
+    const def = { none: 0, one: -10, more: -16 }[a.defaults!];
+    if (def) pay.push({ text: a.defaults === "one" ? "A default in the last 6 years" : "More than one default in the last 6 years", points: def });
+    if (a.defaults !== "none") payWhy.push("You told us about a default. Defaults usually stay on a credit report for 6 years.");
+    if (a.ccj === "yes") { pay.push({ text: "A CCJ in the last 6 years", points: -10 }); payWhy.push("You told us about a county court judgment (CCJ)."); }
+  }
+  const payPts = clamp(pay.reduce((s, x) => s + x.points, 0), 35);
+
+  // 2. Credit utilisation (25)
+  const limits = a.cardLimits!, balances = a.cardBalances!;
+  let util: number | null = null;
+  let utilPts: number;
+  const utilSteps: Step[] = [];
+  const utilWhy: string[] = [];
+  if (limits === 0) {
+    utilPts = balances > 0 ? 0 : 15;
+    utilSteps.push(balances > 0
+      ? { text: "A balance with no available limit", points: 0 }
+      : { text: "No credit-card limits, so there’s no utilisation to measure: a neutral middle score", points: 15 });
+    utilWhy.push(balances > 0 ? "You reported a card balance but no limit, so utilisation can’t be below 100%." : "You told us you don’t have any credit-card limits.");
+  } else {
+    util = Math.round((balances / limits) * 1000) / 10;
+    utilPts = UTILISATION_POINTS.find(([upTo]) => util! <= upTo)![1];
+    utilSteps.push({ text: `£${balances.toLocaleString("en-GB")} used ÷ £${limits.toLocaleString("en-GB")} available = ${util}% utilisation`, points: utilPts });
+    utilWhy.push(`Your reported credit utilisation is approximately ${Math.round(util)}%. In this model, lower utilisation earns more points.`);
+  }
+
+  // 3. Credit history length (15)
+  const histPts = { none: 3, under1: 5, "1to3": 9, "3to6": 12, "6plus": 15 }[a.history!];
+  const histWhy = a.history === "none" ? "You told us you have no previous credit history." : `You told us you’ve had credit for ${LABELS.history[a.history!].toLowerCase()}.`;
+
+  // 4. Recent applications (10)
+  const appPts = { "0": 10, "1": 8, "2": 6, "3": 3, "4plus": 1 }[a.applications!];
+  const appWhy = a.applications === "0" ? "You reported no recent credit applications." : `You reported ${LABELS.applications[a.applications!]} recent credit application${a.applications === "1" ? "" : "s"}. This is what you told us; we can’t see your credit report.`;
+
+  // 5. Existing borrowing (10): having credit isn't penalised; strain and heavy reliance are.
+  const kinds = a.borrowing!;
+  const bSteps: Step[] = [];
+  const bWhy: string[] = [];
+  if (!kinds.length) {
+    bSteps.push({ text: "No current borrowing: neutral, though it means less recent repayment history to show", points: 7 });
+    bWhy.push("You told us you don’t have any borrowing at the moment.");
+  } else {
+    bSteps.push({ text: "Starting points (having credit isn’t penalised)", points: 10 });
+    bWhy.push(`You told us you have: ${kinds.map((k) => LABELS.borrowing[k].toLowerCase()).join(", ")}.`);
+    const keep = { comfortably: 0, sometimes: -4, often: -7 }[a.keeping!];
+    if (keep) bSteps.push({ text: a.keeping === "sometimes" ? "Sometimes struggling to keep up" : "Often struggling to keep up", points: keep });
+    bWhy.push(`You said you keep up with repayments: ${LABELS.keeping[a.keeping!].toLowerCase()}.`);
+    if (a.overdraftRegular === "yes") { bSteps.push({ text: "Regularly using an overdraft", points: -2 }); bWhy.push("You told us you’re regularly in your overdraft."); }
+    if (kinds.length >= 4) { bSteps.push({ text: "Four or more kinds of borrowing at once", points: -1 }); bWhy.push("You have several kinds of borrowing at the same time."); }
+  }
+  const bPts = clamp(bSteps.reduce((s, x) => s + x.points, 0), 10);
+
+  // 6. Stability / report indicators (5)
+  const sSteps: Step[] = [
+    { text: { yes: "On the electoral roll at your current address", no: "Not on the electoral roll at your current address", unsure: "Not sure about the electoral roll" }[a.electoralRoll!], points: { yes: 3, no: 0, unsure: 1 }[a.electoralRoll!] },
+    { text: a.insolvency === "no" ? "No bankruptcy, IVA or debt relief order" : "A bankruptcy, IVA or debt relief order", points: a.insolvency === "no" ? 2 : 0 },
+  ];
+  const sWhy = [
+    { yes: "You told us you’re on the electoral roll at your current address.", no: "You told us you’re not on the electoral roll at your current address.", unsure: "You weren’t sure about the electoral roll." }[a.electoralRoll!],
+    a.insolvency === "no" ? "You told us you have no bankruptcy, IVA or debt relief order." : "You told us about a bankruptcy, IVA or debt relief order.",
+  ];
+  const sPts = clamp(sSteps.reduce((s, x) => s + x.points, 0), 5);
+
+  const components: Component[] = [
+    { key: "payment", label: COMPONENT_LABEL.payment, max: 35, points: payPts, steps: pay, why: payWhy },
+    { key: "utilisation", label: COMPONENT_LABEL.utilisation, max: 25, points: utilPts, steps: utilSteps, why: utilWhy },
+    { key: "history", label: COMPONENT_LABEL.history, max: 15, points: histPts, steps: [{ text: LABELS.history[a.history!], points: histPts }], why: [histWhy] },
+    { key: "applications", label: COMPONENT_LABEL.applications, max: 10, points: appPts, steps: [{ text: `${LABELS.applications[a.applications!]} recent application${a.applications === "1" ? "" : "s"}`, points: appPts }], why: [appWhy] },
+    { key: "borrowing", label: COMPONENT_LABEL.borrowing, max: 10, points: bPts, steps: bSteps, why: bWhy },
+    { key: "stability", label: COMPONENT_LABEL.stability, max: 5, points: sPts, steps: sSteps, why: sWhy },
+  ];
+  const total = components.reduce((s, c) => s + c.points, 0);
+  const b = estimateBand(total);
+  return { ok: true, estimate: { total, band: b.band, bandLabel: b.label, components, utilisation: util } };
 }
 
 /* ---------- what the journey stores ---------- */
 
 export interface CreditProfile {
-  mode: "score" | "explore" | "unknown";
+  mode: "score" | "estimate" | "unknown";
   creditProvider?: Cra;
   creditScale?: ScaleId;
   creditScore?: number;
   /** The agency's own band for the score, from its published scale. */
   creditBand?: string;
   creditSource: "USER_SUPPLIED";
-  explore?: ExploreAnswers;
+  /** Answers for the Before You Sign Credit Estimate. */
+  estimate?: EstimateInputs;
+  /** True once the person has pressed "Calculate". */
+  calculated?: boolean;
 }
 
 export const NO_CREDIT: CreditProfile = { mode: "unknown", creditSource: "USER_SUPPLIED" };
@@ -187,7 +304,7 @@ export const NO_CREDIT: CreditProfile = { mode: "unknown", creditSource: "USER_S
 export function withScore(c: CreditProfile, scaleId: ScaleId, score: number | undefined): CreditProfile {
   const scale = SCALES[scaleId];
   const band = score === undefined ? null : bandFor(scale, score);
-  return { mode: "score", creditProvider: scale.cra, creditScale: scaleId, creditScore: score, creditBand: band?.label, creditSource: "USER_SUPPLIED", explore: c.explore };
+  return { mode: "score", creditProvider: scale.cra, creditScale: scaleId, creditScore: score, creditBand: band?.label, creditSource: "USER_SUPPLIED", estimate: c.estimate };
 }
 
 /** One honest line describing the credit context, for summaries. */
@@ -196,6 +313,16 @@ export function creditLine(c: CreditProfile): string {
     const s = SCALES[c.creditScale];
     return `${s.name}: ${c.creditScore} out of ${s.max}${c.creditBand ? ` (${s.name.split(" ")[0]}’s “${c.creditBand}” band)` : ""}. You told us this.`;
   }
-  if (c.mode === "explore" && c.explore) return `Before You Sign credit profile: ${exploreProfile(c.explore).label}. Based on your answers, not an official score.`;
+  if (c.mode === "estimate" && c.estimate && c.calculated) {
+    const r = creditEstimate(c.estimate);
+    if (r.ok) return `Before You Sign Credit Estimate: ${r.estimate.total}/100 (${r.estimate.bandLabel}). Our educational model, not an official credit score.`;
+  }
   return "Not provided.";
+}
+
+/** The journey only continues once the person has a credit result: a valid agency score, or a calculated estimate. */
+export function creditEstablished(c: CreditProfile): boolean {
+  if (c.mode === "score") return !!(c.creditScale && c.creditScore !== undefined && c.creditBand);
+  if (c.mode === "estimate") return !!(c.calculated && c.estimate && creditEstimate(c.estimate).ok);
+  return false;
 }
